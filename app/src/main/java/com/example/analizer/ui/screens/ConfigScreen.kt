@@ -1,5 +1,7 @@
 package com.example.analizer.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,13 +13,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.analizer.Screen
 import com.example.analizer.domain.StatisticsEngine
 import com.example.analizer.model.AnalysisConfig
-import com.example.analizer.model.ColumnRangeInterval
+import com.example.analizer.model.CardFieldMapping
+import com.example.analizer.model.DisplayGroup
+import com.example.analizer.model.DisplayGroupItem
 import com.example.analizer.model.METRIC_OPTIONS
 import com.example.analizer.model.SpreadsheetData
 
@@ -127,10 +132,16 @@ fun ConfigScreen(
 
     var sheetExpanded by remember { mutableStateOf(false) }
 
+    val displayGroups = if (config.displayGroups.isNotEmpty()) {
+        config.displayGroups
+    } else {
+        config.effectiveDisplayGroups
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Configuração de Intervalos de Análise", fontWeight = FontWeight.Bold) },
+                title = { Text("Configuração de Grupos de Exibição", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { onScreenSelected(Screen.Import) }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
@@ -191,7 +202,7 @@ fun ConfigScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Aba da Planilha",
+                        text = "Aba da Planilha Principal",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -204,6 +215,7 @@ fun ConfigScreen(
                             value = currentSheetName,
                             onValueChange = {},
                             readOnly = true,
+                            label = { Text("Selecione a Aba Principal") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sheetExpanded) },
                             modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                             shape = RoundedCornerShape(12.dp)
@@ -220,31 +232,26 @@ fun ConfigScreen(
                                         val rows = spreadsheetData.sheets[sheet] ?: emptyList()
                                         val colCount = rows.firstOrNull()?.size ?: 0
                                         val cols = (0 until colCount).toList()
-                                        val defaultIntervals = if (colCount > 0) {
-                                            listOf(
-                                                ColumnRangeInterval(
-                                                    startColumn = 0,
-                                                    endColumn = colCount - 1,
-                                                    startRow = null,
-                                                    endRow = null,
-                                                    metric = "Média"
-                                                )
-                                            )
-                                        } else emptyList()
 
                                         onConfigChanged(
                                             config.copy(
                                                 sheetName = sheet,
                                                 selectedColumnIndices = cols,
                                                 startRow = if (rows.size > 1) 1 else 0,
-                                                endRow = if (rows.isNotEmpty()) rows.size - 1 else 0,
-                                                intervals = defaultIntervals
+                                                endRow = if (rows.isNotEmpty()) rows.size - 1 else 0
                                             )
                                         )
                                     }
                                 )
                             }
                         }
+                    }
+                    if (sheetNames.size > 1) {
+                        Text(
+                            text = "Abas encontradas (${sheetNames.size}): ${sheetNames.joinToString(", ")}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -316,7 +323,7 @@ fun ConfigScreen(
                 }
             }
 
-            // Column Range Intervals Container Card
+            // Display Groups Container Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp)
@@ -326,17 +333,17 @@ fun ConfigScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "Intervalos de Análise (Colunas e Linhas)",
+                        text = "Grupos de Exibição",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Defina os intervalos de colunas (início e fim), personalização de linhas e a métrica para cada intervalo de análise.",
+                        text = "Organize suas análises em Grupos de Exibição com nome em texto ou por célula, múltiplas abas e sub-intervalos.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    if (config.intervals.isEmpty()) {
+                    if (displayGroups.isEmpty()) {
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -351,56 +358,387 @@ fun ConfigScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Nenhum intervalo configurado. Clique abaixo para adicionar.",
+                                    text = "Nenhum grupo configurado. Clique abaixo para adicionar.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     } else {
-                        config.intervals.forEachIndexed { index, interval ->
-                            IntervalItemCard(
-                                interval = interval,
-                                totalCols = totalCols,
-                                headerRow = headerRow,
+                        displayGroups.forEachIndexed { index, group ->
+                            DisplayGroupCard(
+                                group = group,
+                                groupIndex = index,
+                                sheets = spreadsheetData.sheets,
+                                sheetNames = sheetNames,
+                                currentGlobalSheet = currentSheetName,
+                                headerRowIndex = headerRowIndex,
                                 customColumnTitles = config.customColumnTitles,
-                                maxRowIndex = maxRowIndex,
                                 globalStartRow = config.startRow,
                                 globalEndRow = config.endRow,
-                                onUpdateInterval = { updatedInterval ->
-                                    val updatedList = config.intervals.toMutableList().apply {
-                                        set(index, updatedInterval)
+                                maxRowIndex = maxRowIndex,
+                                onUpdateGroup = { updatedGroup ->
+                                    val updatedList = displayGroups.toMutableList().apply {
+                                        set(index, updatedGroup)
                                     }
-                                    onConfigChanged(config.copy(intervals = updatedList))
+                                    onConfigChanged(config.copy(displayGroups = updatedList))
                                 },
-                                onDeleteInterval = {
-                                    val updatedList = config.intervals.toMutableList().apply {
+                                onDeleteGroup = {
+                                    val updatedList = displayGroups.toMutableList().apply {
                                         removeAt(index)
                                     }
-                                    onConfigChanged(config.copy(intervals = updatedList))
+                                    onConfigChanged(config.copy(displayGroups = updatedList))
                                 }
                             )
                         }
                     }
 
-                    // Add Interval Button
+                    // Add Group Button
                     OutlinedButton(
                         onClick = {
-                            val newInterval = ColumnRangeInterval(
-                                startColumn = 0,
-                                endColumn = (totalCols - 1).coerceAtLeast(0),
-                                startRow = null,
-                                endRow = null,
-                                metric = "Média"
+                            val newGroup = DisplayGroup(
+                                name = "Grupo ${displayGroups.size + 1}",
+                                selectedSheets = listOf(currentSheetName),
+                                displayOrder = displayGroups.size,
+                                items = listOf(
+                                    DisplayGroupItem(
+                                        startColumn = 0,
+                                        endColumn = (totalCols - 1).coerceAtLeast(0),
+                                        startRow = null,
+                                        endRow = null,
+                                        metric = "Média"
+                                    )
+                                )
                             )
-                            onConfigChanged(config.copy(intervals = config.intervals + newInterval))
+                            onConfigChanged(config.copy(displayGroups = displayGroups + newGroup))
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Rounded.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Adicionar Intervalo")
+                        Text("Adicionar Grupo de Exibição")
+                    }
+                }
+            }
+
+            // Group Ordering & Selection Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Posicionamento e Seleção para Análise",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Escolha quais grupos devem participar da análise e reordene a posição em que aparecem nos cards e gráficos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    displayGroups.forEachIndexed { index, group ->
+                        val groupName = if (group.nameSourceType == "CELL") "Célula ${group.cellReference}" else (group.name.ifBlank { "Grupo ${index + 1}" })
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Checkbox(
+                                        checked = group.enabledForAnalysis,
+                                        onCheckedChange = { checked ->
+                                            val updated = displayGroups.mapIndexed { idx, g ->
+                                                if (idx == index) g.copy(enabledForAnalysis = checked) else g
+                                            }
+                                            onConfigChanged(config.copy(displayGroups = updated))
+                                        }
+                                    )
+                                    Text(
+                                        text = "${index + 1}. $groupName",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            if (index > 0) {
+                                                val mutable = displayGroups.toMutableList()
+                                                val item = mutable.removeAt(index)
+                                                mutable.add(index - 1, item)
+                                                val reordered = mutable.mapIndexed { newIdx, g -> g.copy(displayOrder = newIdx) }
+                                                onConfigChanged(config.copy(displayGroups = reordered))
+                                            }
+                                        },
+                                        enabled = index > 0
+                                    ) {
+                                        Icon(Icons.Rounded.ArrowUpward, contentDescription = "Mover para Cima")
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            if (index < displayGroups.size - 1) {
+                                                val mutable = displayGroups.toMutableList()
+                                                val item = mutable.removeAt(index)
+                                                mutable.add(index + 1, item)
+                                                val reordered = mutable.mapIndexed { newIdx, g -> g.copy(displayOrder = newIdx) }
+                                                onConfigChanged(config.copy(displayGroups = reordered))
+                                            }
+                                        },
+                                        enabled = index < displayGroups.size - 1
+                                    ) {
+                                        Icon(Icons.Rounded.ArrowDownward, contentDescription = "Mover para Baixo")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Chart Group Comparison Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Seleção de Grupos para Gráficos",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Escolha quais grupos serão comparados nos gráficos (se nenhum for marcado, todos os ativos serão comparados).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    displayGroups.forEachIndexed { index, group ->
+                        val groupName = if (group.nameSourceType == "CELL") "Célula ${group.cellReference}" else (group.name.ifBlank { "Grupo ${index + 1}" })
+                        val isSelected = config.chartSelectedGroupIds.contains(groupName) || config.chartSelectedGroupIds.contains(group.id)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val currentSelected = config.chartSelectedGroupIds
+                                    val newSelected = if (isSelected) {
+                                        currentSelected.filter { it != groupName && it != group.id }
+                                    } else {
+                                        currentSelected + groupName
+                                    }
+                                    onConfigChanged(config.copy(chartSelectedGroupIds = newSelected))
+                                },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { checked ->
+                                    val currentSelected = config.chartSelectedGroupIds
+                                    val newSelected = if (checked) {
+                                        currentSelected + groupName
+                                    } else {
+                                        currentSelected.filter { it != groupName && it != group.id }
+                                    }
+                                    onConfigChanged(config.copy(chartSelectedGroupIds = newSelected))
+                                }
+                            )
+                            Text(text = groupName, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+
+            // Card Field Mappings Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Configuração de Campos do Card",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Personalize os títulos e vincule grupos e métricas a cada um dos 6 campos dos cards de análise.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    val defaultFieldNames = listOf("Média", "Mediana", "Desv. Padrão", "Mín / Máx", "Soma", "Contagem")
+                    for (fieldIdx in 0..5) {
+                        val mapping = config.cardFieldMappings.find { it.fieldIndex == fieldIdx }
+                        val customTitle = mapping?.customTitle ?: ""
+                        val selectedGroupId = mapping?.groupId ?: ""
+                        val selectedMetric = mapping?.metric ?: "Média"
+
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Campo ${fieldIdx + 1} (Padrão: ${defaultFieldNames[fieldIdx]})",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                OutlinedTextField(
+                                    value = customTitle,
+                                    onValueChange = { newTitle ->
+                                        val mutableMappings = config.cardFieldMappings.toMutableList()
+                                        val existingIndex = mutableMappings.indexOfFirst { it.fieldIndex == fieldIdx }
+                                        if (existingIndex >= 0) {
+                                            mutableMappings[existingIndex] = mutableMappings[existingIndex].copy(customTitle = newTitle)
+                                        } else {
+                                            mutableMappings.add(CardFieldMapping(fieldIndex = fieldIdx, customTitle = newTitle, groupId = selectedGroupId, metric = selectedMetric))
+                                        }
+                                        onConfigChanged(config.copy(cardFieldMappings = mutableMappings))
+                                    },
+                                    label = { Text("Título Personalizado") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+
+                                // Group Link Dropdown
+                                var groupDropdownExpanded by remember { mutableStateOf(false) }
+                                val linkedGroupName = displayGroups.find { it.id == selectedGroupId || it.name == selectedGroupId }?.let {
+                                    if (it.nameSourceType == "CELL") "Célula ${it.cellReference}" else it.name
+                                } ?: "Grupo Padrão"
+
+                                ExposedDropdownMenuBox(
+                                    expanded = groupDropdownExpanded,
+                                    onExpandedChange = { groupDropdownExpanded = !groupDropdownExpanded },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    OutlinedTextField(
+                                        value = linkedGroupName,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Grupo Vinculado") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupDropdownExpanded) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = groupDropdownExpanded,
+                                        onDismissRequest = { groupDropdownExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Grupo Padrão (Automático)") },
+                                            onClick = {
+                                                groupDropdownExpanded = false
+                                                val mutableMappings = config.cardFieldMappings.toMutableList()
+                                                val existingIndex = mutableMappings.indexOfFirst { it.fieldIndex == fieldIdx }
+                                                val gId = ""
+                                                if (existingIndex >= 0) {
+                                                    mutableMappings[existingIndex] = mutableMappings[existingIndex].copy(groupId = gId)
+                                                } else {
+                                                    mutableMappings.add(CardFieldMapping(fieldIndex = fieldIdx, customTitle = customTitle, groupId = gId, metric = selectedMetric))
+                                                }
+                                                onConfigChanged(config.copy(cardFieldMappings = mutableMappings))
+                                            }
+                                        )
+                                        displayGroups.forEach { grp ->
+                                            val gName = if (grp.nameSourceType == "CELL") "Célula ${grp.cellReference}" else grp.name.ifBlank { "Grupo" }
+                                            DropdownMenuItem(
+                                                text = { Text(gName) },
+                                                onClick = {
+                                                    groupDropdownExpanded = false
+                                                    val mutableMappings = config.cardFieldMappings.toMutableList()
+                                                    val existingIndex = mutableMappings.indexOfFirst { it.fieldIndex == fieldIdx }
+                                                    if (existingIndex >= 0) {
+                                                        mutableMappings[existingIndex] = mutableMappings[existingIndex].copy(groupId = grp.id)
+                                                    } else {
+                                                        mutableMappings.add(CardFieldMapping(fieldIndex = fieldIdx, customTitle = customTitle, groupId = grp.id, metric = selectedMetric))
+                                                    }
+                                                    onConfigChanged(config.copy(cardFieldMappings = mutableMappings))
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Metric Dropdown for this field
+                                var metricDropdownExpanded by remember { mutableStateOf(false) }
+                                ExposedDropdownMenuBox(
+                                    expanded = metricDropdownExpanded,
+                                    onExpandedChange = { metricDropdownExpanded = !metricDropdownExpanded },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    OutlinedTextField(
+                                        value = selectedMetric,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Métrica do Campo") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = metricDropdownExpanded) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = metricDropdownExpanded,
+                                        onDismissRequest = { metricDropdownExpanded = false }
+                                    ) {
+                                        METRIC_OPTIONS.forEach { met ->
+                                            DropdownMenuItem(
+                                                text = { Text(met) },
+                                                onClick = {
+                                                    metricDropdownExpanded = false
+                                                    val mutableMappings = config.cardFieldMappings.toMutableList()
+                                                    val existingIndex = mutableMappings.indexOfFirst { it.fieldIndex == fieldIdx }
+                                                    if (existingIndex >= 0) {
+                                                        mutableMappings[existingIndex] = mutableMappings[existingIndex].copy(metric = met)
+                                                    } else {
+                                                        mutableMappings.add(CardFieldMapping(fieldIndex = fieldIdx, customTitle = customTitle, groupId = selectedGroupId, metric = met))
+                                                    }
+                                                    onConfigChanged(config.copy(cardFieldMappings = mutableMappings))
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -430,17 +768,42 @@ fun ConfigScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IntervalItemCard(
-    interval: ColumnRangeInterval,
-    totalCols: Int,
-    headerRow: List<String>,
+fun DisplayGroupCard(
+    group: DisplayGroup,
+    groupIndex: Int,
+    sheets: Map<String, List<List<String>>>,
+    sheetNames: List<String>,
+    currentGlobalSheet: String,
+    headerRowIndex: Int,
     customColumnTitles: Map<Int, String>,
-    maxRowIndex: Int,
     globalStartRow: Int,
     globalEndRow: Int,
-    onUpdateInterval: (ColumnRangeInterval) -> Unit,
-    onDeleteInterval: () -> Unit
+    maxRowIndex: Int,
+    onUpdateGroup: (DisplayGroup) -> Unit,
+    onDeleteGroup: () -> Unit
 ) {
+    val effectiveSheet = group.selectedSheets.firstOrNull() ?: currentGlobalSheet
+    val sheetRows = sheets[effectiveSheet] ?: emptyList()
+    val safeHeaderRowIndex = headerRowIndex.coerceIn(0, maxOf(0, maxRowIndex))
+    val headerRow = sheetRows.getOrNull(safeHeaderRowIndex) ?: emptyList()
+    val totalCols = headerRow.size.takeIf { it > 0 } ?: (sheetRows.maxOfOrNull { it.size } ?: 0)
+
+    val resolvedName = if (group.nameSourceType == "CELL") {
+        StatisticsEngine().resolveCellText(sheetRows, group.cellReference) ?: "(Célula vazia/inválida)"
+    } else {
+        group.name.ifBlank { "Grupo ${groupIndex + 1}" }
+    }
+
+    var nameTypeExpanded by remember { mutableStateOf(false) }
+    val nameTypeLabel = if (group.nameSourceType == "CELL") "Pegar de Célula" else "Texto"
+
+    var sheetsDropdownExpanded by remember { mutableStateOf(false) }
+    val sheetsSummaryText = if (group.selectedSheets.isEmpty()) {
+        "Aba Global ($currentGlobalSheet)"
+    } else {
+        group.selectedSheets.joinToString(", ")
+    }
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
@@ -450,9 +813,9 @@ fun IntervalItemCard(
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Header with icon and delete button
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -468,105 +831,365 @@ fun IntervalItemCard(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = if (interval.name.isNotBlank()) interval.name else "Intervalo de Colunas",
+                        text = resolvedName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                IconButton(onClick = onDeleteInterval) {
+                IconButton(onClick = onDeleteGroup) {
                     Icon(
                         imageVector = Icons.Rounded.Delete,
-                        contentDescription = "Remover Intervalo",
+                        contentDescription = "Remover Grupo",
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
             }
 
-            // Interval Name Field (Optional)
-            OutlinedTextField(
-                value = interval.name,
-                onValueChange = { newName ->
-                    onUpdateInterval(interval.copy(name = newName))
-                },
-                label = { Text("Nome do Intervalo (Opcional)") },
-                placeholder = { Text("ex: Vendas Trimestrais") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(10.dp)
+            // Name Source Type Dropdown (Texto vs Pegar de Célula)
+            ExposedDropdownMenuBox(
+                expanded = nameTypeExpanded,
+                onExpandedChange = { nameTypeExpanded = !nameTypeExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = nameTypeLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Origem do Nome do Grupo") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = nameTypeExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                    shape = RoundedCornerShape(10.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = nameTypeExpanded,
+                    onDismissRequest = { nameTypeExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Texto") },
+                        onClick = {
+                            nameTypeExpanded = false
+                            onUpdateGroup(group.copy(nameSourceType = "TEXT"))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Pegar de Célula") },
+                        onClick = {
+                            nameTypeExpanded = false
+                            onUpdateGroup(group.copy(nameSourceType = "CELL"))
+                        }
+                    )
+                }
+            }
+
+            if (group.nameSourceType != "CELL") {
+                OutlinedTextField(
+                    value = group.name,
+                    onValueChange = { onUpdateGroup(group.copy(name = it)) },
+                    label = { Text("Nome do Grupo (Texto)") },
+                    placeholder = { Text("ex: Resumo Financeiro (ou deixe em branco)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp)
+                )
+            } else {
+                OutlinedTextField(
+                    value = group.cellReference,
+                    onValueChange = { onUpdateGroup(group.copy(cellReference = it)) },
+                    label = { Text("Referência da Célula (ex: A1)") },
+                    placeholder = { Text("ex: B2") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    supportingText = {
+                        val textFound = StatisticsEngine().resolveCellText(sheetRows, group.cellReference)
+                        Text(if (textFound != null) "Texto encontrado: $textFound" else "Célula não encontrada ou vazia")
+                    }
+                )
+            }
+
+            // Sheets Dropdown with checkboxes
+            ExposedDropdownMenuBox(
+                expanded = sheetsDropdownExpanded,
+                onExpandedChange = { sheetsDropdownExpanded = !sheetsDropdownExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = sheetsSummaryText,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Abas Incluídas no Grupo") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sheetsDropdownExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                    shape = RoundedCornerShape(10.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = sheetsDropdownExpanded,
+                    onDismissRequest = { sheetsDropdownExpanded = false }
+                ) {
+                    sheetNames.forEach { sheet ->
+                        val isChecked = group.selectedSheets.contains(sheet) || (group.selectedSheets.isEmpty() && sheet == currentGlobalSheet)
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = null
+                                    )
+                                    Text(sheet)
+                                }
+                            },
+                            onClick = {
+                                val currentSelected = if (group.selectedSheets.isEmpty()) listOf(currentGlobalSheet) else group.selectedSheets
+                                val newSelected = if (isChecked) {
+                                    currentSelected.filter { it != sheet }
+                                } else {
+                                    currentSelected + sheet
+                                }
+                                onUpdateGroup(group.copy(selectedSheets = newSelected))
+                            }
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Items within group
+            Text(
+                text = "Itens do Grupo (Colunas e Linhas)",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
             )
 
-            // Column Start & Column End Dropdowns
+            group.items.forEachIndexed { itemIdx, item ->
+                DisplayGroupItemCard(
+                    item = item,
+                    totalCols = totalCols,
+                    maxRowIndex = maxRowIndex,
+                    headerRow = headerRow,
+                    customColumnTitles = customColumnTitles,
+                    globalStartRow = globalStartRow,
+                    globalEndRow = globalEndRow,
+                    onUpdateItem = { updatedItem ->
+                        val updatedItems = group.items.toMutableList().apply {
+                            set(itemIdx, updatedItem)
+                        }
+                        onUpdateGroup(group.copy(items = updatedItems))
+                    },
+                    onDeleteItem = {
+                        if (group.items.size > 1) {
+                            val updatedItems = group.items.toMutableList().apply {
+                                removeAt(itemIdx)
+                            }
+                            onUpdateGroup(group.copy(items = updatedItems))
+                        }
+                    },
+                    canDelete = group.items.size > 1
+                )
+            }
+
+            // Add Item button ("+")
+            OutlinedButton(
+                onClick = {
+                    val newItem = DisplayGroupItem(
+                        startColumn = 0,
+                        endColumn = (totalCols - 1).coerceAtLeast(0),
+                        startRow = null,
+                        endRow = null,
+                        metric = "Média"
+                    )
+                    onUpdateGroup(group.copy(items = group.items + newItem))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(Icons.Rounded.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Adicionar Colunas/Linhas neste Grupo")
+            }
+        }
+    }
+}
+
+@Composable
+fun DisplayGroupItemCard(
+    item: DisplayGroupItem,
+    totalCols: Int,
+    maxRowIndex: Int,
+    headerRow: List<String>,
+    customColumnTitles: Map<Int, String>,
+    globalStartRow: Int,
+    globalEndRow: Int,
+    onUpdateItem: (DisplayGroupItem) -> Unit,
+    onDeleteItem: () -> Unit,
+    canDelete: Boolean
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+        ),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = item.customLabel,
+                    onValueChange = { onUpdateItem(item.copy(customLabel = it)) },
+                    label = { Text("Rótulo do Item (Opcional)") },
+                    placeholder = { Text("ex: Vendas Nacionais") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                if (canDelete) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = onDeleteItem) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Remover Item",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ColumnDropdown(
                     label = "Coluna Início",
-                    selectedColumn = interval.startColumn,
+                    selectedColumn = item.startColumn,
                     totalCols = totalCols,
                     headerRow = headerRow,
                     customColumnTitles = customColumnTitles,
                     onColumnSelected = { selected ->
-                        val newEnd = if (selected > interval.endColumn) selected else interval.endColumn
-                        onUpdateInterval(interval.copy(startColumn = selected, endColumn = newEnd))
+                        val newEnd = if (selected > item.endColumn) selected else item.endColumn
+                        onUpdateItem(item.copy(startColumn = selected, endColumn = newEnd))
                     },
                     modifier = Modifier.weight(1f)
                 )
 
                 ColumnDropdown(
                     label = "Coluna Fim",
-                    selectedColumn = interval.endColumn,
+                    selectedColumn = item.endColumn,
                     totalCols = totalCols,
                     headerRow = headerRow,
                     customColumnTitles = customColumnTitles,
                     onColumnSelected = { selected ->
-                        val newStart = if (selected < interval.startColumn) selected else interval.startColumn
-                        onUpdateInterval(interval.copy(startColumn = newStart, endColumn = selected))
+                        val newStart = if (selected < item.startColumn) selected else item.startColumn
+                        onUpdateItem(item.copy(startColumn = newStart, endColumn = selected))
                     },
                     modifier = Modifier.weight(1f)
                 )
             }
 
-            // Specific Start Row & End Row Overrides
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedTextField(
-                    value = interval.startRow?.toString() ?: "",
-                    onValueChange = { text ->
-                        val parsed = text.toIntOrNull()
-                        onUpdateInterval(interval.copy(startRow = parsed?.coerceIn(0, maxRowIndex)))
+                RowDropdown(
+                    label = "Linha Início",
+                    selectedRow = item.startRow,
+                    maxRowIndex = maxRowIndex,
+                    onRowSelected = { row ->
+                        onUpdateItem(item.copy(startRow = row))
                     },
-                    label = { Text("Linha Início (Op.)") },
-                    placeholder = { Text("Global ($globalStartRow)") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    shape = RoundedCornerShape(10.dp)
+                    modifier = Modifier.weight(1f)
                 )
 
-                OutlinedTextField(
-                    value = interval.endRow?.toString() ?: "",
-                    onValueChange = { text ->
-                        val parsed = text.toIntOrNull()
-                        onUpdateInterval(interval.copy(endRow = parsed?.coerceIn(0, maxRowIndex)))
+                RowDropdown(
+                    label = "Linha Fim",
+                    selectedRow = item.endRow,
+                    maxRowIndex = maxRowIndex,
+                    onRowSelected = { row ->
+                        onUpdateItem(item.copy(endRow = row))
                     },
-                    label = { Text("Linha Fim (Op.)") },
-                    placeholder = { Text("Global ($globalEndRow)") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    shape = RoundedCornerShape(10.dp)
+                    modifier = Modifier.weight(1f)
                 )
             }
 
-            // Metric Selection
             ColumnMetricDropdown(
-                currentMetric = interval.metric,
+                currentMetric = item.metric,
                 onMetricSelected = { newMetric ->
-                    onUpdateInterval(interval.copy(metric = newMetric))
+                    onUpdateItem(item.copy(metric = newMetric))
                 }
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RowDropdown(
+    label: String,
+    selectedRow: Int?,
+    maxRowIndex: Int,
+    onRowSelected: (Int?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val options = (0..minOf(998, maxRowIndex)).map { it }
+    val selectedText = if (selectedRow != null && selectedRow in 0..maxRowIndex) {
+        "Linha ${selectedRow + 1}"
+    } else {
+        "Padrão Global"
+    }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selectedText,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+            shape = RoundedCornerShape(8.dp)
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Padrão Global") },
+                onClick = {
+                    expanded = false
+                    onRowSelected(null)
+                }
+            )
+            for (rowIdx in options) {
+                DropdownMenuItem(
+                    text = { Text("Linha ${rowIdx + 1}") },
+                    onClick = {
+                        expanded = false
+                        onRowSelected(rowIdx)
+                    }
+                )
+            }
         }
     }
 }
@@ -646,7 +1269,7 @@ fun ColumnMetricDropdown(
             value = currentMetric,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Métrica") },
+            label = { Text("Métrica / Fórmula") },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()

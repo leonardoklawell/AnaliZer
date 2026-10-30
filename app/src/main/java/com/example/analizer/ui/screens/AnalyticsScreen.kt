@@ -187,8 +187,8 @@ fun AnalyticsScreen(
                 } else {
                     when (selectedTab) {
                         0 -> StatisticsTab(columnStats = columnStats, config = config)
-                        1 -> BarChartTab(columnStats, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
-                        2 -> LineChartTab(columnStats, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
+                        1 -> BarChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
+                        2 -> LineChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
                         3 -> DistributionTab(columnStats)
                         4 -> RawValuesTab(columnStats)
                     }
@@ -198,6 +198,42 @@ fun AnalyticsScreen(
             }
         }
     }
+}
+
+fun getFieldValueForCardField(fieldIndex: Int, stat: ColumnStats, allStats: List<ColumnStats>, config: AnalysisConfig): Pair<String, String> {
+    val defaultTitles = listOf("Média", "Mediana", "Desv. Padrão", "Mín / Máx", "Soma", "Contagem")
+    val isCellVal = stat.metric == "Valor da Célula"
+    val defaultValues = listOf(
+        if (!isCellVal && stat.count > 0) String.format(Locale.getDefault(), "%.2f", stat.mean) else "-",
+        if (!isCellVal && stat.count > 0) String.format(Locale.getDefault(), "%.2f", stat.median) else "-",
+        if (!isCellVal && stat.count > 1) String.format(Locale.getDefault(), "%.2f", stat.stdDev) else "-",
+        if (!isCellVal && stat.count > 0) "${String.format(Locale.getDefault(), "%.1f", stat.min)} / ${String.format(Locale.getDefault(), "%.1f", stat.max)}" else "-",
+        if (!isCellVal && stat.count > 0) String.format(Locale.getDefault(), "%.1f", stat.sum) else "-",
+        if (stat.count > 0) "${stat.count}" else "-"
+    )
+
+    val mapping = config.cardFieldMappings.find { it.fieldIndex == fieldIndex }
+    if (mapping != null) {
+        val title = mapping.customTitle.ifBlank { defaultTitles[fieldIndex] }
+        val targetStat = if (mapping.groupId.isNotBlank()) {
+            allStats.find { it.groupName == mapping.groupId || it.columnIndex.toString() == mapping.groupId } ?: stat
+        } else {
+            stat
+        }
+        val value = when (mapping.metric) {
+            "Média" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.2f", targetStat.mean) else "-"
+            "Mediana" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.2f", targetStat.median) else "-"
+            "Desvio Padrão" -> if (targetStat.count > 1) String.format(Locale.getDefault(), "%.2f", targetStat.stdDev) else "-"
+            "Mínimo" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.1f", targetStat.min) else "-"
+            "Máximo" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.1f", targetStat.max) else "-"
+            "Soma", "Soma Acumulada" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.2f", targetStat.sum) else "-"
+            "Contagem" -> if (targetStat.count > 0) "${targetStat.count}" else "-"
+            "Valor da Célula" -> targetStat.rawStringValues.firstOrNull() ?: "-"
+            else -> defaultValues[fieldIndex]
+        }
+        return Pair(title, value)
+    }
+    return Pair(defaultTitles[fieldIndex], defaultValues[fieldIndex])
 }
 
 @Composable
@@ -211,15 +247,18 @@ fun StatisticsTab(
         // Stats Cards per Column
         columnStats.forEachIndexed { i, stat ->
             val colIndex = stat.columnIndex.takeIf { it >= 0 } ?: config.selectedColumnIndices.getOrNull(i) ?: i
-            val selectedMetric = config.getMetricForColumn(colIndex)
+            val selectedMetric = stat.metric.ifBlank { config.getMetricForColumn(colIndex) }
 
             val highlightValue = when (selectedMetric) {
-                "Soma" -> String.format(Locale.getDefault(), "%.2f", stat.sum)
+                "Soma", "Soma Acumulada" -> String.format(Locale.getDefault(), "%.2f", stat.sum)
                 "Máximo" -> String.format(Locale.getDefault(), "%.2f", stat.max)
                 "Mínimo" -> String.format(Locale.getDefault(), "%.2f", stat.min)
                 "Mediana" -> String.format(Locale.getDefault(), "%.2f", stat.median)
                 "Desvio Padrão" -> String.format(Locale.getDefault(), "%.2f", stat.stdDev)
+                "Variância" -> String.format(Locale.getDefault(), "%.2f", stat.stdDev * stat.stdDev)
+                "Taxa de Crescimento" -> String.format(Locale.getDefault(), "%.2f%%", if (stat.rawValues.size >= 2 && stat.rawValues.first() != 0.0) ((stat.rawValues.last() - stat.rawValues.first()) / stat.rawValues.first()) * 100.0 else 0.0)
                 "Contagem" -> "${stat.count}"
+                "Valor da Célula" -> stat.rawStringValues.firstOrNull() ?: "-"
                 else -> String.format(Locale.getDefault(), "%.2f", stat.mean) // "Média"
             }
 
@@ -239,12 +278,15 @@ fun StatisticsTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = stat.columnName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            // Removed "Aba: ...", showing ONLY the configured group name in blue
+                            Text(
+                                text = stat.groupName.ifBlank { stat.columnName },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.primaryContainer
@@ -261,22 +303,29 @@ fun StatisticsTab(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                    // Detailed metrics grid
+                    // Detailed metrics grid linked to cardFieldMappings
+                    val f0 = getFieldValueForCardField(0, stat, columnStats, config)
+                    val f1 = getFieldValueForCardField(1, stat, columnStats, config)
+                    val f2 = getFieldValueForCardField(2, stat, columnStats, config)
+                    val f3 = getFieldValueForCardField(3, stat, columnStats, config)
+                    val f4 = getFieldValueForCardField(4, stat, columnStats, config)
+                    val f5 = getFieldValueForCardField(5, stat, columnStats, config)
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        StatDetailItem("Média", String.format(Locale.getDefault(), "%.2f", stat.mean))
-                        StatDetailItem("Mediana", String.format(Locale.getDefault(), "%.2f", stat.median))
-                        StatDetailItem("Desv. Padrão", String.format(Locale.getDefault(), "%.2f", stat.stdDev))
+                        StatDetailItem(f0.first, f0.second)
+                        StatDetailItem(f1.first, f1.second)
+                        StatDetailItem(f2.first, f2.second)
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        StatDetailItem("Mín / Máx", "${String.format(Locale.getDefault(), "%.1f", stat.min)} / ${String.format(Locale.getDefault(), "%.1f", stat.max)}")
-                        StatDetailItem("Soma", String.format(Locale.getDefault(), "%.1f", stat.sum))
-                        StatDetailItem("Contagem", "${stat.count}")
+                        StatDetailItem(f3.first, f3.second)
+                        StatDetailItem(f4.first, f4.second)
+                        StatDetailItem(f5.first, f5.second)
                     }
                 }
             }
@@ -303,9 +352,16 @@ fun StatDetailItem(label: String, value: String) {
 @Composable
 fun BarChartTab(
     columnStats: List<ColumnStats>,
+    config: AnalysisConfig,
     activeTooltipIndex: Int?,
     onTooltipChanged: (Int?) -> Unit
 ) {
+    val activeStats = if (config.chartSelectedGroupIds.isNotEmpty()) {
+        columnStats.filter { config.chartSelectedGroupIds.contains(it.groupName) }
+    } else {
+        columnStats
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp)
@@ -320,8 +376,8 @@ fun BarChartTab(
                 fontWeight = FontWeight.Bold
             )
 
-            if (columnStats.isEmpty()) {
-                Text("Sem dados para exibir.")
+            if (activeStats.isEmpty()) {
+                Text("Sem dados para exibir para os grupos selecionados.")
             } else {
                 val primaryColor = MaterialTheme.colorScheme.primary
 
@@ -329,38 +385,45 @@ fun BarChartTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(280.dp)
-                        .pointerInput(columnStats) {
+                        .pointerInput(activeStats) {
                             detectTapGestures { offset ->
-                                val barWidth = size.width / (columnStats.size * 2)
-                                val tappedIndex = (offset.x / (barWidth * 2)).toInt()
-                                if (tappedIndex in columnStats.indices) {
-                                    onTooltipChanged(if (activeTooltipIndex == tappedIndex) null else tappedIndex)
-                                } else {
-                                    onTooltipChanged(null)
+                                val count = activeStats.size.coerceAtLeast(1)
+                                val barWidth = size.width / (count * 2f)
+                                if (barWidth > 0f) {
+                                    val tappedIndex = (offset.x / (barWidth * 2f)).toInt()
+                                    if (tappedIndex in activeStats.indices) {
+                                        onTooltipChanged(if (activeTooltipIndex == tappedIndex) null else tappedIndex)
+                                    } else {
+                                        onTooltipChanged(null)
+                                    }
                                 }
                             }
                         }
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val maxVal = columnStats.maxOfOrNull { it.mean }?.takeIf { it > 0.0 } ?: 1.0
-                        val barWidth = size.width / (columnStats.size * 2f)
+                        val maxVal = activeStats.maxOfOrNull { it.mean }?.takeIf { it > 0.0 && !it.isNaN() } ?: 1.0
+                        val count = activeStats.size.coerceAtLeast(1)
+                        val barWidth = (size.width / (count * 2f)).coerceAtLeast(0f)
 
-                        columnStats.forEachIndexed { index, stat ->
-                            val barHeight = ((stat.mean / maxVal) * (size.height - 40f)).toFloat()
+                        activeStats.forEachIndexed { index, stat ->
+                            val safeMean = if (stat.mean.isNaN() || stat.mean.isInfinite()) 0.0 else stat.mean
+                            val barHeight = ((safeMean.coerceAtLeast(0.0) / maxVal) * (size.height - 40f)).toFloat().coerceIn(0f, size.height)
                             val left = index * (barWidth * 2f) + barWidth * 0.5f
-                            val top = size.height - barHeight - 30f
+                            val top = (size.height - barHeight - 30f).coerceIn(0f, size.height)
 
-                            drawRect(
-                                color = if (activeTooltipIndex == index) primaryColor else primaryColor.copy(alpha = 0.8f),
-                                topLeft = Offset(left, top),
-                                size = Size(barWidth, barHeight)
-                            )
+                            if (barWidth > 0f && barHeight > 0f) {
+                                drawRect(
+                                    color = if (activeTooltipIndex == index) primaryColor else primaryColor.copy(alpha = 0.8f),
+                                    topLeft = Offset(left, top),
+                                    size = Size(barWidth, barHeight)
+                                )
+                            }
                         }
                     }
                 }
 
-                if (activeTooltipIndex != null && activeTooltipIndex in columnStats.indices) {
-                    val stat = columnStats[activeTooltipIndex]
+                if (activeTooltipIndex != null && activeTooltipIndex in activeStats.indices) {
+                    val stat = activeStats[activeTooltipIndex]
                     Surface(
                         color = MaterialTheme.colorScheme.inverseSurface,
                         shape = RoundedCornerShape(8.dp)
@@ -387,9 +450,16 @@ fun BarChartTab(
 @Composable
 fun LineChartTab(
     columnStats: List<ColumnStats>,
+    config: AnalysisConfig,
     activeTooltipIndex: Int?,
     onTooltipChanged: (Int?) -> Unit
 ) {
+    val activeStats = if (config.chartSelectedGroupIds.isNotEmpty()) {
+        columnStats.filter { config.chartSelectedGroupIds.contains(it.groupName) }
+    } else {
+        columnStats
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp)
@@ -404,7 +474,7 @@ fun LineChartTab(
                 fontWeight = FontWeight.Bold
             )
 
-            if (columnStats.size < 2) {
+            if (activeStats.size < 2) {
                 Text("São necessárias pelo menos 2 colunas para exibir o gráfico de linhas.")
             } else {
                 val primaryColor = MaterialTheme.colorScheme.primary
@@ -413,26 +483,29 @@ fun LineChartTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(280.dp)
-                        .pointerInput(columnStats) {
+                        .pointerInput(activeStats) {
                             detectTapGestures { offset ->
-                                val stepX = size.width / (columnStats.size - 1).coerceAtLeast(1)
-                                val tappedIndex = (offset.x / stepX).roundToInt()
-                                if (tappedIndex in columnStats.indices) {
-                                    onTooltipChanged(if (activeTooltipIndex == tappedIndex) null else tappedIndex)
-                                } else {
-                                    onTooltipChanged(null)
+                                val stepX = (size.width / (activeStats.size - 1).coerceAtLeast(1))
+                                if (stepX > 0f) {
+                                    val tappedIndex = (offset.x / stepX).roundToInt()
+                                    if (tappedIndex in activeStats.indices) {
+                                        onTooltipChanged(if (activeTooltipIndex == tappedIndex) null else tappedIndex)
+                                    } else {
+                                        onTooltipChanged(null)
+                                    }
                                 }
                             }
                         }
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val maxVal = columnStats.maxOfOrNull { it.mean }?.takeIf { it > 0.0 } ?: 1.0
-                        val stepX = size.width / (columnStats.size - 1).coerceAtLeast(1)
+                        val maxVal = activeStats.maxOfOrNull { it.mean }?.takeIf { it > 0.0 && !it.isNaN() } ?: 1.0
+                        val stepX = (size.width / (activeStats.size - 1).coerceAtLeast(1))
 
                         val path = Path()
-                        columnStats.forEachIndexed { index, stat ->
+                        activeStats.forEachIndexed { index, stat ->
+                            val safeMean = if (stat.mean.isNaN() || stat.mean.isInfinite()) 0.0 else stat.mean
                             val x = index * stepX
-                            val y = size.height - (((stat.mean / maxVal) * (size.height - 40f))).toFloat() - 30f
+                            val y = (size.height - (((safeMean.coerceAtLeast(0.0) / maxVal) * (size.height - 40f))).toFloat() - 30f).coerceIn(0f, size.height)
                             if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
 
                             drawCircle(
@@ -450,8 +523,8 @@ fun LineChartTab(
                     }
                 }
 
-                if (activeTooltipIndex != null && activeTooltipIndex in columnStats.indices) {
-                    val stat = columnStats[activeTooltipIndex]
+                if (activeTooltipIndex != null && activeTooltipIndex in activeStats.indices) {
+                    val stat = activeStats[activeTooltipIndex]
                     Surface(
                         color = MaterialTheme.colorScheme.inverseSurface,
                         shape = RoundedCornerShape(8.dp)
@@ -492,8 +565,9 @@ fun DistributionTab(columnStats: List<ColumnStats>) {
             )
 
             columnStats.forEach { stat ->
-                val range = (stat.max - stat.min).takeIf { it > 0.0 } ?: 1.0
-                val progress = if (range > 0.0) (stat.stdDev / range).toFloat().coerceIn(0f, 1f) else 0f
+                val range = (stat.max - stat.min).takeIf { it > 0.0 && !it.isNaN() } ?: 1.0
+                val rawProgress = if (stat.stdDev.isNaN() || range.isNaN() || range <= 0.0) 0f else (stat.stdDev / range).toFloat()
+                val progress = rawProgress.takeIf { !it.isNaN() && !it.isInfinite() }?.coerceIn(0f, 1f) ?: 0f
 
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -504,7 +578,8 @@ fun DistributionTab(columnStats: List<ColumnStats>) {
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(stat.columnName, fontWeight = FontWeight.SemiBold)
-                        Text("Desv. Padrão: ${String.format(Locale.getDefault(), "%.2f", stat.stdDev)}")
+                        val safeStd = if (stat.stdDev.isNaN() || stat.stdDev.isInfinite()) 0.0 else stat.stdDev
+                        Text("Desv. Padrão: ${String.format(Locale.getDefault(), "%.2f", safeStd)}")
                     }
                     LinearProgressIndicator(
                         progress = { progress },

@@ -31,6 +31,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("AnaliZer", "Fatal uncaught exception on thread ${thread.name}", throwable)
+            previousHandler?.uncaughtException(thread, throwable)
+        }
         enableEdgeToEdge()
         setContent {
             AnaliZerTheme {
@@ -54,7 +59,7 @@ fun MainApp(viewModel: AnalyzerViewModel) {
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val inputUrl by viewModel.inputUrl.collectAsStateWithLifecycle()
 
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Analytics) }
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.Import) }
 
     LaunchedEffect(spreadsheetData) {
         if (spreadsheetData != null && currentScreen is Screen.Import) {

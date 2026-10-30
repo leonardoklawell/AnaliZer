@@ -9,6 +9,8 @@ import com.example.analizer.domain.StatisticsEngine
 import com.example.analizer.model.AnalysisConfig
 import com.example.analizer.model.ColumnRangeInterval
 import com.example.analizer.model.ColumnStats
+import com.example.analizer.model.DisplayGroup
+import com.example.analizer.model.DisplayGroupItem
 import com.example.analizer.model.SpreadsheetData
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +38,7 @@ class AnalyzerViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _inputUrl = MutableStateFlow("")
+    private val _inputUrl = MutableStateFlow("https://docs.google.com/spreadsheets/d/1iJutQlIzSyzJkOCXYNxnSP1FUTXLHd0TTCmxMtvvkeQ/edit?gid=209726842#gid=209726842")
     val inputUrl: StateFlow<String> = _inputUrl.asStateFlow()
 
     fun setInputUrl(url: String) {
@@ -44,48 +46,76 @@ class AnalyzerViewModel(
     }
 
     fun loadGoogleSheet(url: String) {
-        if (url.isBlank()) {
-            _errorMessage.value = "Please enter a valid Google Sheets URL."
+        val trimmedUrl = url.trim()
+        if (trimmedUrl.isBlank()) {
+            _errorMessage.value = "Por favor, insira um link válido do Google Sheets."
             return
         }
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val result = repository.fetchGoogleSheet(url)
-            _isLoading.value = false
-            result.onSuccess { data ->
-                _spreadsheetData.value = data
-                val defaultSheet = data.sheetNames.firstOrNull() ?: ""
-                val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
-                val colCount = firstSheetRows.firstOrNull()?.size ?: 0
-                val allCols = (0 until colCount).toList()
-                val defaultEndRow = if (firstSheetRows.isNotEmpty()) firstSheetRows.size - 1 else 0
+            try {
+                val result = repository.fetchGoogleSheet(trimmedUrl)
+                _isLoading.value = false
+                result.onSuccess { data ->
+                    try {
+                        _spreadsheetData.value = data
+                        val defaultSheet = data.sheetNames.firstOrNull() ?: ""
+                        val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
+                        val colCount = firstSheetRows.firstOrNull()?.size ?: 0
+                        val allCols = (0 until colCount).toList()
+                        val defaultEndRow = if (firstSheetRows.isNotEmpty()) firstSheetRows.size - 1 else 0
 
-                val defaultIntervals = if (colCount > 0) {
-                    listOf(
-                        ColumnRangeInterval(
-                            startColumn = 0,
-                            endColumn = colCount - 1,
-                            startRow = null,
-                            endRow = null,
-                            metric = "Média"
+                        val defaultIntervals = if (colCount > 0) {
+                            listOf(
+                                ColumnRangeInterval(
+                                    startColumn = 0,
+                                    endColumn = colCount - 1,
+                                    startRow = null,
+                                    endRow = null,
+                                    metric = "Média"
+                                )
+                            )
+                        } else emptyList()
+
+                        val defaultDisplayGroups = if (colCount > 0) {
+                            listOf(
+                                DisplayGroup(
+                                    name = "Grupo 1",
+                                    selectedSheets = if (defaultSheet.isNotBlank()) listOf(defaultSheet) else emptyList(),
+                                    items = listOf(
+                                        DisplayGroupItem(
+                                            startColumn = 0,
+                                            endColumn = colCount - 1,
+                                            startRow = null,
+                                            endRow = null,
+                                            metric = "Média"
+                                        )
+                                    )
+                                )
+                            )
+                        } else emptyList()
+
+                        val newConfig = AnalysisConfig(
+                            sheetName = defaultSheet,
+                            headerRowIndex = 0,
+                            selectedColumnIndices = allCols,
+                            startRow = if (firstSheetRows.size > 1) 1 else 0,
+                            endRow = defaultEndRow,
+                            intervals = defaultIntervals,
+                            displayGroups = defaultDisplayGroups
                         )
-                    )
-                } else emptyList()
-
-                _analysisConfig.update {
-                    it.copy(
-                        sheetName = defaultSheet,
-                        headerRowIndex = 0,
-                        selectedColumnIndices = allCols,
-                        startRow = if (firstSheetRows.size > 1) 1 else 0,
-                        endRow = defaultEndRow,
-                        intervals = defaultIntervals
-                    )
+                        _analysisConfig.value = newConfig
+                        runAnalysisForData(data, newConfig)
+                    } catch (t: Throwable) {
+                        _errorMessage.value = "Erro ao processar dados da planilha: ${t.localizedMessage ?: t.message}"
+                    }
+                }.onFailure { e ->
+                    _errorMessage.value = "Falha ao carregar Google Sheets: ${e.localizedMessage ?: e.message}"
                 }
-                runAnalysisForData(data, _analysisConfig.value)
-            }.onFailure { e ->
-                _errorMessage.value = "Failed to load Google Sheet: ${e.localizedMessage ?: e.toString()}"
+            } catch (t: Throwable) {
+                _isLoading.value = false
+                _errorMessage.value = "Erro na requisição: ${t.localizedMessage ?: t.message}"
             }
         }
     }
@@ -94,41 +124,68 @@ class AnalyzerViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val result = repository.loadSpreadsheetFromUri(context, uri)
-            _isLoading.value = false
-            result.onSuccess { data ->
-                _spreadsheetData.value = data
-                val defaultSheet = data.sheetNames.firstOrNull() ?: ""
-                val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
-                val colCount = firstSheetRows.firstOrNull()?.size ?: 0
-                val allCols = (0 until colCount).toList()
-                val defaultEndRow = if (firstSheetRows.isNotEmpty()) firstSheetRows.size - 1 else 0
+            try {
+                val result = repository.loadSpreadsheetFromUri(context, uri)
+                _isLoading.value = false
+                result.onSuccess { data ->
+                    try {
+                        _spreadsheetData.value = data
+                        val defaultSheet = data.sheetNames.firstOrNull() ?: ""
+                        val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
+                        val colCount = firstSheetRows.firstOrNull()?.size ?: 0
+                        val allCols = (0 until colCount).toList()
+                        val defaultEndRow = if (firstSheetRows.isNotEmpty()) firstSheetRows.size - 1 else 0
 
-                val defaultIntervals = if (colCount > 0) {
-                    listOf(
-                        ColumnRangeInterval(
-                            startColumn = 0,
-                            endColumn = colCount - 1,
-                            startRow = null,
-                            endRow = null,
-                            metric = "Média"
+                        val defaultIntervals = if (colCount > 0) {
+                            listOf(
+                                ColumnRangeInterval(
+                                    startColumn = 0,
+                                    endColumn = colCount - 1,
+                                    startRow = null,
+                                    endRow = null,
+                                    metric = "Média"
+                                )
+                            )
+                        } else emptyList()
+
+                        val defaultDisplayGroups = if (colCount > 0) {
+                            listOf(
+                                DisplayGroup(
+                                    name = "Grupo 1",
+                                    selectedSheets = if (defaultSheet.isNotBlank()) listOf(defaultSheet) else emptyList(),
+                                    items = listOf(
+                                        DisplayGroupItem(
+                                            startColumn = 0,
+                                            endColumn = colCount - 1,
+                                            startRow = null,
+                                            endRow = null,
+                                            metric = "Média"
+                                        )
+                                    )
+                                )
+                            )
+                        } else emptyList()
+
+                        val newConfig = AnalysisConfig(
+                            sheetName = defaultSheet,
+                            headerRowIndex = 0,
+                            selectedColumnIndices = allCols,
+                            startRow = if (firstSheetRows.size > 1) 1 else 0,
+                            endRow = defaultEndRow,
+                            intervals = defaultIntervals,
+                            displayGroups = defaultDisplayGroups
                         )
-                    )
-                } else emptyList()
-
-                _analysisConfig.update {
-                    it.copy(
-                        sheetName = defaultSheet,
-                        headerRowIndex = 0,
-                        selectedColumnIndices = allCols,
-                        startRow = if (firstSheetRows.size > 1) 1 else 0,
-                        endRow = defaultEndRow,
-                        intervals = defaultIntervals
-                    )
+                        _analysisConfig.value = newConfig
+                        runAnalysisForData(data, newConfig)
+                    } catch (t: Throwable) {
+                        _errorMessage.value = "Erro ao processar arquivo: ${t.localizedMessage ?: t.message}"
+                    }
+                }.onFailure { e ->
+                    _errorMessage.value = "Falha ao ler arquivo: ${e.localizedMessage ?: e.message}"
                 }
-                runAnalysisForData(data, _analysisConfig.value)
-            }.onFailure { e ->
-                _errorMessage.value = "Failed to load file: ${e.localizedMessage ?: e.toString()}"
+            } catch (t: Throwable) {
+                _isLoading.value = false
+                _errorMessage.value = "Erro ao abrir arquivo: ${t.localizedMessage ?: t.message}"
             }
         }
     }
@@ -183,13 +240,32 @@ class AnalyzerViewModel(
                     )
                 } else emptyList()
 
+                val defaultDisplayGroups = if (colCount > 0) {
+                    listOf(
+                        DisplayGroup(
+                            name = "Grupo 1",
+                            selectedSheets = listOf(sheetName),
+                            items = listOf(
+                                DisplayGroupItem(
+                                    startColumn = 0,
+                                    endColumn = colCount - 1,
+                                    startRow = null,
+                                    endRow = null,
+                                    metric = "Média"
+                                )
+                            )
+                        )
+                    )
+                } else emptyList()
+
                 val config = AnalysisConfig(
                     sheetName = sheetName,
                     headerRowIndex = 0,
                     selectedColumnIndices = allCols,
                     startRow = 1,
                     endRow = sampleRows.size - 1,
-                    intervals = defaultIntervals
+                    intervals = defaultIntervals,
+                    displayGroups = defaultDisplayGroups
                 )
                 _analysisConfig.value = config
                 runAnalysisForData(spreadsheetData, config)

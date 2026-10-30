@@ -163,4 +163,56 @@ class StatisticsEngineTest {
         assertEquals("Desvio Padrão", config.getMetricForColumn(3))
         assertEquals("Média", config.getMetricForColumn(4))
     }
+
+    @Test
+    fun testMultiSheetIntervals() {
+        val sheetA = listOf(
+            listOf("Item", "ValA"),
+            listOf("1", "10"),
+            listOf("2", "20")
+        )
+        val sheetB = listOf(
+            listOf("Item", "ValB"),
+            listOf("1", "100"),
+            listOf("2", "200")
+        )
+
+        val spreadsheetData = SpreadsheetData(
+            sheetNames = listOf("Aba1", "Aba2"),
+            sheets = mapOf("Aba1" to sheetA, "Aba2" to sheetB)
+        )
+
+        val interval1 = ColumnRangeInterval(
+            name = "Int1",
+            sheetName = "Aba1",
+            startColumn = 1,
+            endColumn = 1,
+            metric = "Soma"
+        )
+        val interval2 = ColumnRangeInterval(
+            name = "Int2",
+            sheetName = "Aba2",
+            startColumn = 1,
+            endColumn = 1,
+            metric = "Média"
+        )
+
+        val config = AnalysisConfig(
+            sheetName = "Aba1",
+            headerRowIndex = 0,
+            startRow = 1,
+            endRow = 2,
+            intervals = listOf(interval1, interval2)
+        )
+
+        val stats = engine.calculateStats(spreadsheetData, config)
+        assertEquals(2, stats.size)
+        assertEquals("[Aba1] Int1", stats[0].columnName)
+        assertEquals("Aba1", stats[0].sheetName)
+        assertEquals(30.0, stats[0].sum, 0.001)
+
+        assertEquals("[Aba2] Int2", stats[1].columnName)
+        assertEquals("Aba2", stats[1].sheetName)
+        assertEquals(150.0, stats[1].mean, 0.001)
+    }
 }

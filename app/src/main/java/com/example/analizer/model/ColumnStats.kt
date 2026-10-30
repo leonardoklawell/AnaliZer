@@ -14,5 +14,8 @@ data class ColumnStats(
     val stdDev: Double = 0.0,
     val rawValues: List<Double> = emptyList(),
     val rawStringValues: List<String> = emptyList(),
-    val columnIndex: Int = 0
+    val columnIndex: Int = 0,
+    val metric: String = "Média",
+    val sheetName: String = "",
+    val groupName: String = ""
 )

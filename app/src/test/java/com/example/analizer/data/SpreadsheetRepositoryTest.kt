@@ -15,12 +15,16 @@ class SpreadsheetRepositoryTest {
     @Test
     fun testTransformGoogleSheetUrl() {
         val shareLink = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit?usp=sharing"
-        val expected = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/export?format=csv"
+        val expected = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/export?format=xlsx"
         assertEquals(expected, repository.transformGoogleSheetUrl(shareLink))
 
         val linkWithGid = "https://docs.google.com/spreadsheets/d/1ABC123/edit#gid=12345"
         val expectedWithGid = "https://docs.google.com/spreadsheets/d/1ABC123/export?format=csv&gid=12345"
-        assertEquals(expectedWithGid, repository.transformGoogleSheetUrl(linkWithGid))
+        assertEquals(expectedWithGid, repository.transformGoogleSheetCsvUrl(linkWithGid))
+
+        val linkWithQueryGid = "https://docs.google.com/spreadsheets/d/1iJutQlIzSyzJkOCXYNxnSP1FUTXLHd0TTCmxMtvvkeQ/edit?gid=209726842#gid=209726842"
+        val expectedWithQueryGid = "https://docs.google.com/spreadsheets/d/1iJutQlIzSyzJkOCXYNxnSP1FUTXLHd0TTCmxMtvvkeQ/export?format=csv&gid=209726842"
+        assertEquals(expectedWithQueryGid, repository.transformGoogleSheetCsvUrl(linkWithQueryGid))
     }
 
     @Test

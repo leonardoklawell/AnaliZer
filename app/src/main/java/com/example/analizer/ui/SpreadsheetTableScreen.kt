@@ -196,8 +196,9 @@ fun SpreadsheetTableScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val maxDisplayRows = 100
                     Text(
-                        text = "Total de linhas: ${rows.size}",
+                        text = if (rows.size > maxDisplayRows) "Linhas: ${rows.size} (exibindo primeiras $maxDisplayRows)" else "Total de linhas: ${rows.size}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -220,6 +221,7 @@ fun SpreadsheetTableScreen(
                 ) {
                     val horizontalScrollState = rememberScrollState()
                     val verticalScrollState = rememberScrollState()
+                    val displayRows = rows.take(100)
 
                     Box(
                         modifier = Modifier
@@ -231,7 +233,7 @@ fun SpreadsheetTableScreen(
                         Column(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            rows.forEachIndexed { rowIndex, row ->
+                            displayRows.forEachIndexed { rowIndex, row ->
                                 val isHeader = rowIndex == config.headerRowIndex
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)

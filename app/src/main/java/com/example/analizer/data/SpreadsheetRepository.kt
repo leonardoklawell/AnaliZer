@@ -22,7 +22,12 @@ import java.io.InputStream
 import java.math.BigDecimal
 
 class SpreadsheetRepository(
-    private val okHttpClient: OkHttpClient = OkHttpClient.Builder().build()
+    private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(java.time.Duration.ofSeconds(30))
+        .readTimeout(java.time.Duration.ofSeconds(60))
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .build()
 ) {
 
     suspend fun parseExcel(inputStream: InputStream): SpreadsheetData = withContext(Dispatchers.IO) {
@@ -117,9 +122,28 @@ class SpreadsheetRepository(
     }
 
     suspend fun fetchGoogleSheet(urlOrShareLink: String): Result<SpreadsheetData> = withContext(Dispatchers.IO) {
+        val trimmed = urlOrShareLink.trim()
+        val xlsxUrl = transformGoogleSheetUrl(trimmed)
+        val xlsxResult = fetchUrl(xlsxUrl)
+        if (xlsxResult.isSuccess) {
+            return@withContext xlsxResult
+        }
+        val csvUrl = transformGoogleSheetCsvUrl(trimmed)
+        if (csvUrl != xlsxUrl) {
+            val csvResult = fetchUrl(csvUrl)
+            if (csvResult.isSuccess) {
+                return@withContext csvResult
+            }
+        }
+        xlsxResult
+    }
+
+    private suspend fun fetchUrl(targetUrl: String): Result<SpreadsheetData> = withContext(Dispatchers.IO) {
         try {
-            val targetUrl = transformGoogleSheetUrl(urlOrShareLink)
-            val request = Request.Builder().url(targetUrl).build()
+            val request = Request.Builder()
+                .url(targetUrl)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .build()
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(IOException("Failed to fetch URL: ${response.code} ${response.message}"))
@@ -129,7 +153,8 @@ class SpreadsheetRepository(
 
                 val bytes = body.bytes()
                 val contentType = response.header("Content-Type", "").orEmpty()
-                val isExcel = targetUrl.endsWith(".xlsx", ignoreCase = true) ||
+                val isExcel = targetUrl.contains("format=xlsx") ||
+                              targetUrl.endsWith(".xlsx", ignoreCase = true) ||
                               targetUrl.endsWith(".xls", ignoreCase = true) ||
                               contentType.contains("spreadsheet") ||
                               contentType.contains("excel") ||
@@ -139,11 +164,11 @@ class SpreadsheetRepository(
                     try {
                         val excelData = parseExcel(ByteArrayInputStream(bytes))
                         return@withContext Result.success(excelData)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         try {
                             val csvData = parseCsv(ByteArrayInputStream(bytes), "Sheet1")
                             return@withContext Result.success(csvData)
-                        } catch (_: Exception) {
+                        } catch (_: Throwable) {
                             return@withContext Result.failure(e)
                         }
                     }
@@ -151,17 +176,17 @@ class SpreadsheetRepository(
                     try {
                         val csvData = parseCsv(ByteArrayInputStream(bytes), "Sheet1")
                         return@withContext Result.success(csvData)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         try {
                             val excelData = parseExcel(ByteArrayInputStream(bytes))
                             return@withContext Result.success(excelData)
-                        } catch (_: Exception) {
+                        } catch (_: Throwable) {
                             return@withContext Result.failure(e)
                         }
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Result.failure(e)
         }
     }
@@ -184,11 +209,11 @@ class SpreadsheetRepository(
                     try {
                         val data = parseExcel(ByteArrayInputStream(bytes))
                         return@withContext Result.success(data)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         try {
                             val data = parseCsv(ByteArrayInputStream(bytes), "Sheet1")
                             return@withContext Result.success(data)
-                        } catch (_: Exception) {
+                        } catch (_: Throwable) {
                             return@withContext Result.failure(e)
                         }
                     }
@@ -196,17 +221,17 @@ class SpreadsheetRepository(
                     try {
                         val data = parseCsv(ByteArrayInputStream(bytes), "Sheet1")
                         return@withContext Result.success(data)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         try {
                             val data = parseExcel(ByteArrayInputStream(bytes))
                             return@withContext Result.success(data)
-                        } catch (_: Exception) {
+                        } catch (_: Throwable) {
                             return@withContext Result.failure(e)
                         }
                     }
                 }
             } ?: Result.failure(IOException("Could not open InputStream for Uri: $uri"))
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Result.failure(e)
         }
     }
@@ -226,7 +251,21 @@ class SpreadsheetRepository(
             if (match != null) {
                 val spreadsheetId = match.groups[1]?.value
                 if (spreadsheetId != null) {
-                    val gidRegex = Regex("[#&]gid=([0-9]+)")
+                    return "https://docs.google.com/spreadsheets/d/$spreadsheetId/export?format=xlsx"
+                }
+            }
+        }
+        return url
+    }
+
+    internal fun transformGoogleSheetCsvUrl(url: String): String {
+        if (url.contains("docs.google.com/spreadsheets")) {
+            val regex = Regex("/spreadsheets/d/([a-zA-Z0-9-_]+)")
+            val match = regex.find(url)
+            if (match != null) {
+                val spreadsheetId = match.groups[1]?.value
+                if (spreadsheetId != null) {
+                    val gidRegex = Regex("[?#&]gid=([0-9]+)")
                     val gidMatch = gidRegex.find(url)
                     val gidParam = if (gidMatch != null) "&gid=${gidMatch.groups[1]?.value}" else ""
                     return "https://docs.google.com/spreadsheets/d/$spreadsheetId/export?format=csv$gidParam"
