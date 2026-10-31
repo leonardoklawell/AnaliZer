@@ -240,7 +240,7 @@ fun SettingsDialog(
                                 value = inputEmail,
                                 onValueChange = { inputEmail = it },
                                 label = { Text("E-mail Google") },
-                                placeholder = { Text("ex: leonardoaraujo34@gmail.com") },
+                                placeholder = { Text("ex: usuario@gmail.com") },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("google_email_input"),
@@ -255,7 +255,7 @@ fun SettingsDialog(
                                 value = inputName,
                                 onValueChange = { inputName = it },
                                 label = { Text("Nome do Usuário (Opcional)") },
-                                placeholder = { Text("ex: Leonardo Araújo") },
+                                placeholder = { Text("ex: Seu Nome") },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("google_name_input"),
@@ -268,10 +268,13 @@ fun SettingsDialog(
 
                             Button(
                                 onClick = {
-                                    val emailToUse = inputEmail.ifBlank { "leonardoaraujo34@gmail.com" }
-                                    onLogin(emailToUse, inputName)
-                                    isEditingAccount = false
+                                    val trimmed = inputEmail.trim()
+                                    if (trimmed.isNotBlank()) {
+                                        onLogin(trimmed, inputName)
+                                        isEditingAccount = false
+                                    }
                                 },
+                                enabled = inputEmail.trim().isNotBlank(),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("google_login_button"),

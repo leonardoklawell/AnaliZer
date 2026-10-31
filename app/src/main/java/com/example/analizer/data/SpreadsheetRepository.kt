@@ -352,9 +352,9 @@ class SpreadsheetRepository(
 
             if (foundSpreadsheets.isEmpty()) {
                 val errorMsg = if (targetSpreadsheetName.isNotBlank()) {
-                    "Nenhuma planilha contendo '$targetSpreadsheetName' foi encontrada na pasta e subpastas. Certifique-se de que a pasta no Google Drive está com compartilhamento público ('Qualquer pessoa com o link')."
+                    "Nenhuma planilha contendo '$targetSpreadsheetName' foi encontrada na pasta e subpastas. Certifique-se de que a pasta foi compartilhada com a sua conta do Google ou possui permissão de leitura."
                 } else {
-                    "Nenhuma planilha foi encontrada na pasta do Google Drive informada."
+                    "Nenhuma planilha foi encontrada na pasta do Google Drive informada. Certifique-se de que a pasta foi compartilhada com o seu e-mail ou possui acesso habilitado."
                 }
                 return@withContext Result.failure(java.io.IOException(errorMsg))
             }
@@ -403,7 +403,7 @@ class SpreadsheetRepository(
     private fun listDriveFolderChildren(folderId: String, apiKey: String): List<DriveItem> {
         val q = "'$folderId' in parents and trashed = false"
         val encodedQ = java.net.URLEncoder.encode(q, "UTF-8")
-        val url = "https://www.googleapis.com/drive/v3/files?q=$encodedQ&fields=files(id,name,mimeType)&pageSize=100&key=$apiKey"
+        val url = "https://www.googleapis.com/drive/v3/files?q=$encodedQ&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=100&fields=files(id,name,mimeType)&key=$apiKey"
         val request = Request.Builder().url(url).build()
 
         try {

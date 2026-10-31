@@ -6,12 +6,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class UserSession(
-    val isLoggedIn: Boolean = true,
-    val userEmail: String = "leonardoaraujo34@gmail.com",
-    val userName: String = "Leonardo Araújo",
+    val isLoggedIn: Boolean = false,
+    val userEmail: String = "",
+    val userName: String = "",
     val projectId: String = "gen-lang-client-0130244093",
     val oauthClientId: String = "391811116027-69jcq39i03ptgirlbi4ekgf2nqj5gbqs.apps.googleusercontent.com",
-    val isDriveAuthorized: Boolean = true,
+    val isDriveAuthorized: Boolean = false,
     val scopes: List<String> = listOf("https://www.googleapis.com/auth/drive.readonly")
 )
 
@@ -23,21 +23,21 @@ class UserSessionManager(context: Context) {
     val session: StateFlow<UserSession> = _session.asStateFlow()
 
     private fun loadSession(): UserSession {
-        val isLoggedIn = prefs.getBoolean(KEY_IS_LOGGED_IN, true)
-        val email = prefs.getString(KEY_USER_EMAIL, "leonardoaraujo34@gmail.com") ?: "leonardoaraujo34@gmail.com"
-        val name = prefs.getString(KEY_USER_NAME, "Leonardo Araújo") ?: "Leonardo Araújo"
+        val isLoggedIn = prefs.getBoolean(KEY_IS_LOGGED_IN, false)
+        val email = prefs.getString(KEY_USER_EMAIL, "") ?: ""
+        val name = prefs.getString(KEY_USER_NAME, "") ?: ""
         val projectId = prefs.getString(KEY_PROJECT_ID, "gen-lang-client-0130244093") ?: "gen-lang-client-0130244093"
         val oauthClientId = prefs.getString(KEY_OAUTH_CLIENT_ID, "391811116027-69jcq39i03ptgirlbi4ekgf2nqj5gbqs.apps.googleusercontent.com")
             ?: "391811116027-69jcq39i03ptgirlbi4ekgf2nqj5gbqs.apps.googleusercontent.com"
-        val isDriveAuthorized = prefs.getBoolean(KEY_DRIVE_AUTHORIZED, true)
+        val isDriveAuthorized = prefs.getBoolean(KEY_DRIVE_AUTHORIZED, false)
 
         return UserSession(
-            isLoggedIn = isLoggedIn,
+            isLoggedIn = isLoggedIn && email.isNotBlank(),
             userEmail = email,
             userName = name,
             projectId = projectId,
             oauthClientId = oauthClientId,
-            isDriveAuthorized = isDriveAuthorized
+            isDriveAuthorized = isDriveAuthorized && email.isNotBlank()
         )
     }
 

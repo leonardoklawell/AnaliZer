@@ -225,21 +225,6 @@ fun ImportScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
-
-                        FilledTonalButton(
-                            onClick = onOpenSettings,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.AccountCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Conta Google", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        }
                     }
 
                     Text(

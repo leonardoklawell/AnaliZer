@@ -30,12 +30,12 @@ class AnalyzerViewModel(
 
     private val _userSession = MutableStateFlow(
         UserSession(
-            isLoggedIn = true,
-            userEmail = "leonardoaraujo34@gmail.com",
-            userName = "Leonardo Araújo",
+            isLoggedIn = false,
+            userEmail = "",
+            userName = "",
             projectId = "gen-lang-client-0130244093",
             oauthClientId = "391811116027-69jcq39i03ptgirlbi4ekgf2nqj5gbqs.apps.googleusercontent.com",
-            isDriveAuthorized = true
+            isDriveAuthorized = false
         )
     )
     val userSession: StateFlow<UserSession> = _userSession.asStateFlow()
