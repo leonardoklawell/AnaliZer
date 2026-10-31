@@ -45,6 +45,8 @@ material = "1.4.0"
 poi = "5.2.5"
 commonsCsv = "1.10.0"
 vico = "2.0.0"
+credentials = "1.5.0-rc01"
+googleid = "1.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -100,6 +102,9 @@ poiOoxml = { group = "org.apache.poi", name = "poi-ooxml", version.ref = "poi" }
 commonsCsv = { group = "org.apache.commons", name = "commons-csv", version.ref = "commonsCsv" }
 vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }
 vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
+androidx-credentials-play-services-auth = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
+googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

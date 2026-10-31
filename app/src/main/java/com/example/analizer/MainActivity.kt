@@ -78,7 +78,7 @@ fun MainApp(viewModel: AnalyzerViewModel) {
     if (showSettingsDialog) {
         com.example.analizer.ui.screens.SettingsDialog(
             userSession = userSession,
-            onLogin = { email, name -> viewModel.login(context, email, name) },
+            onLogin = { email, name, idToken -> viewModel.login(context, email, name, idToken) },
             onLogout = { viewModel.logout(context) },
             onDismiss = { showSettingsDialog = false }
         )

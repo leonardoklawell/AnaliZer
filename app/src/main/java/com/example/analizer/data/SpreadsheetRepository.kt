@@ -121,19 +121,23 @@ class SpreadsheetRepository(
         )
     }
 
-    suspend fun fetchGoogleSheet(urlOrShareLink: String, targetSpreadsheetName: String = ""): Result<SpreadsheetData> = withContext(Dispatchers.IO) {
+    suspend fun fetchGoogleSheet(
+        urlOrShareLink: String,
+        targetSpreadsheetName: String = "",
+        authToken: String = ""
+    ): Result<SpreadsheetData> = withContext(Dispatchers.IO) {
         val trimmed = urlOrShareLink.trim()
         if (trimmed.contains("/folders/") || trimmed.contains("drive.google.com/drive")) {
-            return@withContext searchGoogleDriveFolder(trimmed, targetSpreadsheetName)
+            return@withContext searchGoogleDriveFolder(trimmed, targetSpreadsheetName, authToken = authToken)
         }
         val xlsxUrl = transformGoogleSheetUrl(trimmed)
-        val xlsxResult = fetchUrl(xlsxUrl)
+        val xlsxResult = fetchUrl(xlsxUrl, authToken = authToken)
         if (xlsxResult.isSuccess) {
             return@withContext xlsxResult
         }
         val csvUrl = transformGoogleSheetCsvUrl(trimmed)
         if (csvUrl != xlsxUrl) {
-            val csvResult = fetchUrl(csvUrl)
+            val csvResult = fetchUrl(csvUrl, authToken = authToken)
             if (csvResult.isSuccess) {
                 return@withContext csvResult
             }
@@ -141,12 +145,15 @@ class SpreadsheetRepository(
         xlsxResult
     }
 
-    private suspend fun fetchUrl(targetUrl: String): Result<SpreadsheetData> = withContext(Dispatchers.IO) {
+    private suspend fun fetchUrl(targetUrl: String, authToken: String = ""): Result<SpreadsheetData> = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(targetUrl)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                .build()
+            if (authToken.isNotBlank()) {
+                requestBuilder.header("Authorization", "Bearer $authToken")
+            }
+            val request = requestBuilder.build()
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(IOException("Failed to fetch URL: ${response.code} ${response.message}"))
@@ -243,8 +250,8 @@ class SpreadsheetRepository(
         emit(loadSpreadsheetFromUri(context, uri))
     }.flowOn(Dispatchers.IO)
 
-    fun streamGoogleSheet(urlOrShareLink: String): Flow<Result<SpreadsheetData>> = flow {
-        emit(fetchGoogleSheet(urlOrShareLink))
+    fun streamGoogleSheet(urlOrShareLink: String, authToken: String = ""): Flow<Result<SpreadsheetData>> = flow {
+        emit(fetchGoogleSheet(urlOrShareLink, authToken = authToken))
     }.flowOn(Dispatchers.IO)
 
     internal fun transformGoogleSheetUrl(url: String): String {
@@ -307,7 +314,8 @@ class SpreadsheetRepository(
     suspend fun searchGoogleDriveFolder(
         folderUrlOrId: String,
         targetSpreadsheetName: String,
-        apiKey: String = "AIzaSyBt7RMey2FcEHq55jizwcEfT_ryqMEUit0"
+        apiKey: String = "AIzaSyBt7RMey2FcEHq55jizwcEfT_ryqMEUit0",
+        authToken: String = ""
     ): Result<SpreadsheetData> = withContext(Dispatchers.IO) {
         val folderId = extractFolderId(folderUrlOrId)
         if (folderId.isBlank()) {
@@ -315,7 +323,7 @@ class SpreadsheetRepository(
         }
 
         try {
-            val rootName = getDriveItemName(folderId, apiKey) ?: "Pasta Principal"
+            val rootName = getDriveItemName(folderId, apiKey, authToken) ?: "Pasta Principal"
             val queue = ArrayDeque<Pair<String, String>>()
             queue.add(Pair(folderId, rootName))
 
@@ -326,7 +334,7 @@ class SpreadsheetRepository(
                 val (currentFid, currentFname) = queue.removeFirst()
                 if (!visited.add(currentFid)) continue
 
-                val children = listDriveFolderChildren(currentFid, apiKey)
+                val children = listDriveFolderChildren(currentFid, apiKey, authToken)
                 for (child in children) {
                     if (child.isFolder) {
                         queue.add(Pair(child.id, child.name))
@@ -334,7 +342,7 @@ class SpreadsheetRepository(
                         val matches = targetSpreadsheetName.isBlank() ||
                                 child.name.contains(targetSpreadsheetName.trim(), ignoreCase = true)
                         if (matches) {
-                            val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
+                            val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey, authToken)
                             if (parsed != null && parsed.sheetNames.isNotEmpty()) {
                                 foundSpreadsheets.add(
                                     com.example.analizer.model.FolderSpreadsheet(
@@ -354,7 +362,7 @@ class SpreadsheetRepository(
                 val errorMsg = if (targetSpreadsheetName.isNotBlank()) {
                     "Nenhuma planilha contendo '$targetSpreadsheetName' foi encontrada na pasta e subpastas. Certifique-se de que a pasta foi compartilhada com a sua conta do Google ou possui permissão de leitura."
                 } else {
-                    "Nenhuma planilha foi encontrada na pasta do Google Drive informada. Certifique-se de que a pasta foi compartilhada com o seu e-mail ou possui acesso habilitado."
+                    "Nenhuma planilha foi encontrada na pasta do Google Drive informada. Certifique-se de que a pasta foi compartilhada com o seu e-mail do Google ou possui permissão de leitura."
                 }
                 return@withContext Result.failure(java.io.IOException(errorMsg))
             }
@@ -400,11 +408,15 @@ class SpreadsheetRepository(
             name.endsWith(".csv", ignoreCase = true)
     }
 
-    private fun listDriveFolderChildren(folderId: String, apiKey: String): List<DriveItem> {
+    private fun listDriveFolderChildren(folderId: String, apiKey: String, authToken: String = ""): List<DriveItem> {
         val q = "'$folderId' in parents and trashed = false"
         val encodedQ = java.net.URLEncoder.encode(q, "UTF-8")
         val url = "https://www.googleapis.com/drive/v3/files?q=$encodedQ&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=100&fields=files(id,name,mimeType)&key=$apiKey"
-        val request = Request.Builder().url(url).build()
+        val requestBuilder = Request.Builder().url(url)
+        if (authToken.isNotBlank()) {
+            requestBuilder.header("Authorization", "Bearer $authToken")
+        }
+        val request = requestBuilder.build()
 
         try {
             okHttpClient.newCall(request).execute().use { response ->
@@ -430,9 +442,13 @@ class SpreadsheetRepository(
         }
     }
 
-    private fun getDriveItemName(id: String, apiKey: String): String? {
-        val url = "https://www.googleapis.com/drive/v3/files/$id?fields=name&key=$apiKey"
-        val request = Request.Builder().url(url).build()
+    private fun getDriveItemName(id: String, apiKey: String, authToken: String = ""): String? {
+        val url = "https://www.googleapis.com/drive/v3/files/$id?fields=name&supportsAllDrives=true&key=$apiKey"
+        val requestBuilder = Request.Builder().url(url)
+        if (authToken.isNotBlank()) {
+            requestBuilder.header("Authorization", "Bearer $authToken")
+        }
+        val request = requestBuilder.build()
         try {
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
@@ -444,18 +460,18 @@ class SpreadsheetRepository(
         }
     }
 
-    private suspend fun fetchDriveSpreadsheetData(id: String, mimeType: String, apiKey: String): SpreadsheetData? {
+    private suspend fun fetchDriveSpreadsheetData(id: String, mimeType: String, apiKey: String, authToken: String = ""): SpreadsheetData? {
         val exportUrl = if (mimeType == "application/vnd.google-apps.spreadsheet") {
             "https://docs.google.com/spreadsheets/d/$id/export?format=xlsx"
         } else {
             "https://www.googleapis.com/drive/v3/files/$id?alt=media&key=$apiKey"
         }
-        val res = fetchUrl(exportUrl)
+        val res = fetchUrl(exportUrl, authToken = authToken)
         if (res.isSuccess) return res.getOrNull()
 
         if (mimeType == "application/vnd.google-apps.spreadsheet") {
             val apiExportUrl = "https://www.googleapis.com/drive/v3/files/$id/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&key=$apiKey"
-            val apiRes = fetchUrl(apiExportUrl)
+            val apiRes = fetchUrl(apiExportUrl, authToken = authToken)
             if (apiRes.isSuccess) return apiRes.getOrNull()
         }
         return null

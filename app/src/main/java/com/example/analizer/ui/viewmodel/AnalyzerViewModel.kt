@@ -45,9 +45,9 @@ class AnalyzerViewModel(
         _userSession.value = sessionManager.session.value
     }
 
-    fun login(context: Context, email: String, name: String = "") {
+    fun login(context: Context, email: String, name: String = "", idToken: String = "") {
         val sessionManager = UserSessionManager.getInstance(context)
-        sessionManager.login(email, name)
+        sessionManager.login(email, name, idToken)
         _userSession.value = sessionManager.session.value
     }
 
@@ -93,7 +93,8 @@ class AnalyzerViewModel(
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                val result = repository.fetchGoogleSheet(trimmedUrl, targetSpreadsheetName)
+                val authToken = _userSession.value.idToken
+                val result = repository.fetchGoogleSheet(trimmedUrl, targetSpreadsheetName, authToken = authToken)
                 _isLoading.value = false
                 result.onSuccess { data ->
                     try {

@@ -1,5 +1,6 @@
 package com.example.analizer.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,23 +14,35 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import com.example.analizer.data.UserSession
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsDialog(
     userSession: UserSession,
-    onLogin: (String, String) -> Unit,
+    onLogin: (String, String, String) -> Unit,
     onLogout: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
     var isEditingAccount by remember { mutableStateOf(!userSession.isLoggedIn) }
     var inputEmail by remember { mutableStateOf(userSession.userEmail) }
     var inputName by remember { mutableStateOf(userSession.userName) }
+    var isSigningInWithGoogle by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -236,6 +249,86 @@ fun SettingsDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
+                            // Real Google Account Sign-In Button via CredentialManager
+                            Button(
+                                onClick = {
+                                    isSigningInWithGoogle = true
+                                    coroutineScope.launch {
+                                        try {
+                                            val credentialManager = CredentialManager.create(context)
+                                            val rawNonce = java.util.UUID.randomUUID().toString()
+                                            val md = java.security.MessageDigest.getInstance("SHA-256")
+                                            val digest = md.digest(rawNonce.toByteArray())
+                                            val hashedNonce = digest.fold("") { str, it -> str + "%02x".format(it) }
+
+                                            val googleIdOption = GetGoogleIdOption.Builder()
+                                                .setFilterByAuthorizedAccounts(false)
+                                                .setServerClientId(userSession.oauthClientId)
+                                                .setNonce(hashedNonce)
+                                                .build()
+
+                                            val request = GetCredentialRequest.Builder()
+                                                .addCredentialOption(googleIdOption)
+                                                .build()
+
+                                            val result = credentialManager.getCredential(context = context, request = request)
+                                            val credential = result.credential
+                                            if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                                                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                                                val email = googleIdTokenCredential.id
+                                                val displayName = googleIdTokenCredential.displayName ?: ""
+                                                val idToken = googleIdTokenCredential.idToken
+                                                onLogin(email, displayName, idToken)
+                                                isEditingAccount = false
+                                                Toast.makeText(context, "Login Google concluído: $email", Toast.LENGTH_SHORT).show()
+                                            }
+                                        } catch (e: GetCredentialException) {
+                                            Toast.makeText(context, "Insira seu e-mail Google no campo abaixo para fazer login.", Toast.LENGTH_LONG).show()
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Insira seu e-mail Google no campo abaixo para fazer login.", Toast.LENGTH_SHORT).show()
+                                        } finally {
+                                            isSigningInWithGoogle = false
+                                        }
+                                    }
+                                },
+                                enabled = !isSigningInWithGoogle,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("google_credential_login_button"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) {
+                                if (isSigningInWithGoogle) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Conectando ao Google...")
+                                } else {
+                                    Icon(Icons.Rounded.AccountCircle, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Fazer Login com Google", fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                HorizontalDivider(modifier = Modifier.weight(1f))
+                                Text(
+                                    text = "  ou digite seu e-mail  ",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                HorizontalDivider(modifier = Modifier.weight(1f))
+                            }
+
                             OutlinedTextField(
                                 value = inputEmail,
                                 onValueChange = { inputEmail = it },
@@ -266,27 +359,24 @@ fun SettingsDialog(
                                 }
                             )
 
-                            Button(
+                            OutlinedButton(
                                 onClick = {
                                     val trimmed = inputEmail.trim()
                                     if (trimmed.isNotBlank()) {
-                                        onLogin(trimmed, inputName)
+                                        onLogin(trimmed, inputName, "")
                                         isEditingAccount = false
+                                        Toast.makeText(context, "Sessão iniciada para $trimmed", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 enabled = inputEmail.trim().isNotBlank(),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("google_login_button"),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Icon(Icons.Rounded.AccountCircle, contentDescription = null)
+                                Icon(Icons.Rounded.Login, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Fazer Login com Google", fontWeight = FontWeight.Bold)
+                                Text("Entrar com E-mail digitado", fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
