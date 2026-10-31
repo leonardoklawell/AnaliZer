@@ -327,7 +327,7 @@ class SpreadsheetRepository(
         }
 
         try {
-            // Check if the folderId is actually a direct file/spreadsheet
+            // Check if the folderId is actually a direct file/spreadsheet or sheet URL
             val directItem = getDriveItemDetails(folderId, apiKey)
             if (directItem != null && directItem.isSpreadsheet) {
                 val parsed = fetchDriveSpreadsheetData(directItem.id, directItem.mimeType, apiKey)
@@ -343,9 +343,10 @@ class SpreadsheetRepository(
             val foundSpreadsheets = mutableListOf<com.example.analizer.model.FolderSpreadsheet>()
             val visitedFolders = mutableSetOf<String>()
             val processedFileIds = mutableSetOf<String>()
+            val allDiscoveredFiles = mutableListOf<Pair<DriveItem, String>>() // Item, FolderName
 
-            // 1. BFS folder traversal
-            while (queue.isNotEmpty() && visitedFolders.size < 60) {
+            // 1. BFS folder traversal up to 100 folders deep
+            while (queue.isNotEmpty() && visitedFolders.size < 100) {
                 val (currentFid, currentFname) = queue.removeFirst()
                 if (!visitedFolders.add(currentFid)) continue
 
@@ -354,50 +355,91 @@ class SpreadsheetRepository(
                     if (child.isFolder) {
                         queue.add(Pair(child.id, child.name))
                     } else if (child.isSpreadsheet && processedFileIds.add(child.id)) {
-                        if (matchesTargetName(child.name, targetSpreadsheetName)) {
-                            val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
-                            if (parsed != null && parsed.sheetNames.isNotEmpty()) {
-                                foundSpreadsheets.add(
-                                    com.example.analizer.model.FolderSpreadsheet(
-                                        folderName = currentFname,
-                                        spreadsheetName = child.name,
-                                        sheetNames = parsed.sheetNames,
-                                        sheets = parsed.sheets
-                                    )
+                        allDiscoveredFiles.add(Pair(child, currentFname))
+                    }
+                }
+            }
+
+            // 2. Process matching spreadsheets first
+            val targetMatches = allDiscoveredFiles.filter { (item, _) ->
+                matchesTargetName(item.name, targetSpreadsheetName)
+            }
+
+            for ((child, folderName) in targetMatches) {
+                val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
+                if (parsed != null && parsed.sheetNames.isNotEmpty()) {
+                    foundSpreadsheets.add(
+                        com.example.analizer.model.FolderSpreadsheet(
+                            folderName = folderName,
+                            spreadsheetName = child.name,
+                            sheetNames = parsed.sheetNames,
+                            sheets = parsed.sheets
+                        )
+                    )
+                }
+            }
+
+            // 3. Fallback: If no target matches yielded valid data, try all other discovered spreadsheets in folder
+            if (foundSpreadsheets.isEmpty() && allDiscoveredFiles.isNotEmpty()) {
+                for ((child, folderName) in allDiscoveredFiles) {
+                    if (targetMatches.any { it.first.id == child.id }) continue // Skip already tried
+                    val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
+                    if (parsed != null && parsed.sheetNames.isNotEmpty()) {
+                        foundSpreadsheets.add(
+                            com.example.analizer.model.FolderSpreadsheet(
+                                folderName = folderName,
+                                spreadsheetName = child.name,
+                                sheetNames = parsed.sheetNames,
+                                sheets = parsed.sheets
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 4. Direct global search query by name if targetSpreadsheetName is non-blank and BFS yielded no spreadsheet
+            if (foundSpreadsheets.isEmpty() && targetSpreadsheetName.isNotBlank()) {
+                val directSearchResults = searchDriveByName(targetSpreadsheetName, apiKey)
+                for (child in directSearchResults) {
+                    if (child.isSpreadsheet && processedFileIds.add(child.id)) {
+                        val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
+                        if (parsed != null && parsed.sheetNames.isNotEmpty()) {
+                            foundSpreadsheets.add(
+                                com.example.analizer.model.FolderSpreadsheet(
+                                    folderName = rootName,
+                                    spreadsheetName = child.name,
+                                    sheetNames = parsed.sheetNames,
+                                    sheets = parsed.sheets
                                 )
-                            }
+                            )
                         }
                     }
                 }
             }
 
-            // 2. Direct global search query by name if targetSpreadsheetName is non-blank and BFS yielded no spreadsheet
+            // 5. Check if targetSpreadsheetName itself is a URL/ID containing a sheet/file
             if (foundSpreadsheets.isEmpty() && targetSpreadsheetName.isNotBlank()) {
-                val directSearchResults = searchDriveByName(targetSpreadsheetName, apiKey)
-                for (child in directSearchResults) {
-                    if (child.isSpreadsheet && processedFileIds.add(child.id)) {
-                        if (matchesTargetName(child.name, targetSpreadsheetName)) {
-                            val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
-                            if (parsed != null && parsed.sheetNames.isNotEmpty()) {
-                                foundSpreadsheets.add(
-                                    com.example.analizer.model.FolderSpreadsheet(
-                                        folderName = rootName,
-                                        spreadsheetName = child.name,
-                                        sheetNames = parsed.sheetNames,
-                                        sheets = parsed.sheets
-                                    )
-                                )
-                            }
-                        }
+                val extractedId = extractFolderId(targetSpreadsheetName)
+                if (extractedId.isNotBlank() && extractedId != folderId) {
+                    val parsed = fetchDriveSpreadsheetData(extractedId, "application/vnd.google-apps.spreadsheet", apiKey)
+                    if (parsed != null && parsed.sheetNames.isNotEmpty()) {
+                        foundSpreadsheets.add(
+                            com.example.analizer.model.FolderSpreadsheet(
+                                folderName = rootName,
+                                spreadsheetName = targetSpreadsheetName,
+                                sheetNames = parsed.sheetNames,
+                                sheets = parsed.sheets
+                            )
+                        )
                     }
                 }
             }
 
             if (foundSpreadsheets.isEmpty()) {
                 val errorMsg = if (targetSpreadsheetName.isNotBlank()) {
-                    "Nenhuma planilha contendo '$targetSpreadsheetName' foi encontrada na pasta e subpastas do Google Drive. Verifique se o nome digitado está correto e se a pasta/planilha possui permissão de leitura."
+                    "Nenhuma planilha contendo '$targetSpreadsheetName' foi encontrada na pasta e subpastas. Certifique-se de que a pasta no Google Drive possui permissão de visualização pública ('Qualquer pessoa com o link')."
                 } else {
-                    "Nenhuma planilha foi encontrada na pasta do Google Drive informada. Verifique se a pasta possui acesso de leitura habilitado."
+                    "Nenhuma planilha foi encontrada na pasta informada. Certifique-se de que a pasta no Google Drive possui permissão de visualização pública ('Qualquer pessoa com o link')."
                 }
                 return@withContext Result.failure(java.io.IOException(errorMsg))
             }
@@ -436,18 +478,36 @@ class SpreadsheetRepository(
         if (targetName.isBlank()) return true
         val childNorm = normalizeName(childName)
         val targetNorm = normalizeName(targetName)
+
+        if (childNorm == targetNorm) return true
         if (childNorm.contains(targetNorm) || targetNorm.contains(childNorm)) return true
 
         val targetWords = targetNorm.split(" ").filter { it.length > 1 }
-        if (targetWords.isNotEmpty() && targetWords.all { childNorm.contains(it) }) return true
+        val childWords = childNorm.split(" ").filter { it.length > 1 }
+
+        if (targetWords.isNotEmpty()) {
+            val matchesCount = targetWords.count { tWord -> childNorm.contains(tWord) }
+            if (matchesCount == targetWords.size) return true
+            if (targetWords.size >= 2 && matchesCount >= (targetWords.size + 1) / 2) return true
+        }
+
+        if (childWords.isNotEmpty()) {
+            val matchesCount = childWords.count { cWord -> targetNorm.contains(cWord) }
+            if (matchesCount == childWords.size) return true
+        }
 
         return false
     }
 
     private fun normalizeName(str: String): String {
-        val clean = str.replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+        val clean = str
+            .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("[_\\-\\.\t]+"), " ")
         val nfd = java.text.Normalizer.normalize(clean, java.text.Normalizer.Form.NFD)
-        return Regex("\\p{InCombiningDiacriticalMarks}+").replace(nfd, "").lowercase().trim()
+        return Regex("\\p{InCombiningDiacriticalMarks}+").replace(nfd, "")
+            .lowercase()
+            .trim()
+            .replace(Regex("\\s+"), " ")
     }
 
     private data class DriveItem(val id: String, val name: String, val mimeType: String) {
@@ -456,39 +516,120 @@ class SpreadsheetRepository(
             mimeType == "application/vnd.google-apps.spreadsheet" ||
             mimeType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
             mimeType == "application/vnd.ms-excel" ||
+            mimeType.contains("spreadsheet") ||
             name.endsWith(".xlsx", ignoreCase = true) ||
             name.endsWith(".xls", ignoreCase = true) ||
             name.endsWith(".csv", ignoreCase = true)
     }
 
     private fun listDriveFolderChildren(folderId: String, apiKey: String): List<DriveItem> {
-        val q = "'$folderId' in parents and trashed = false"
-        val encodedQ = java.net.URLEncoder.encode(q, "UTF-8")
-        val url = "https://www.googleapis.com/drive/v3/files?q=$encodedQ&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=100&fields=files(id,name,mimeType)&key=$apiKey"
-        val request = Request.Builder().url(url).build()
+        val list = mutableListOf<DriveItem>()
+        val seenIds = mutableSetOf<String>()
 
+        // 1. Google Drive API v3 query
         try {
+            val q = "'$folderId' in parents and trashed = false"
+            val encodedQ = java.net.URLEncoder.encode(q, "UTF-8")
+            val url = "https://www.googleapis.com/drive/v3/files?q=$encodedQ&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=100&fields=files(id,name,mimeType)&key=$apiKey"
+            val request = Request.Builder().url(url).build()
+
             okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return emptyList()
-                val body = response.body?.string() ?: return emptyList()
-                val json = org.json.JSONObject(body)
-                val files = json.optJSONArray("files") ?: return emptyList()
-                val list = mutableListOf<DriveItem>()
-                for (i in 0 until files.length()) {
-                    val obj = files.getJSONObject(i)
-                    list.add(
-                        DriveItem(
-                            id = obj.optString("id"),
-                            name = obj.optString("name"),
-                            mimeType = obj.optString("mimeType")
-                        )
-                    )
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (!body.isNullOrBlank()) {
+                        val json = org.json.JSONObject(body)
+                        val files = json.optJSONArray("files")
+                        if (files != null) {
+                            for (i in 0 until files.length()) {
+                                val obj = files.getJSONObject(i)
+                                val item = DriveItem(
+                                    id = obj.optString("id"),
+                                    name = obj.optString("name"),
+                                    mimeType = obj.optString("mimeType")
+                                )
+                                if (item.id.isNotBlank() && seenIds.add(item.id)) {
+                                    list.add(item)
+                                }
+                            }
+                        }
+                    }
                 }
-                return list
             }
         } catch (_: Exception) {
-            return emptyList()
+            // Ignore API error and proceed to HTML scraping
         }
+
+        // 2. Web HTML Scraping fallback
+        val htmlItems = scrapeDriveFolderHtml(folderId, apiKey)
+        for (item in htmlItems) {
+            if (item.id.isNotBlank() && seenIds.add(item.id)) {
+                list.add(item)
+            }
+        }
+
+        return list
+    }
+
+    private fun scrapeDriveFolderHtml(folderId: String, apiKey: String): List<DriveItem> {
+        val items = mutableListOf<DriveItem>()
+        val visitedIds = mutableSetOf<String>()
+        visitedIds.add(folderId)
+
+        val urlsToTry = listOf(
+            "https://drive.google.com/drive/folders/$folderId",
+            "https://drive.google.com/drive/u/0/folders/$folderId",
+            "https://drive.google.com/embeddedfolderview?id=$folderId#list"
+        )
+
+        for (urlStr in urlsToTry) {
+            try {
+                val request = Request.Builder()
+                    .url(urlStr)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+                    .build()
+
+                okHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val html = response.body?.string() ?: return@use
+
+                    // Folder links regex
+                    val folderRegexes = listOf(
+                        Regex("""/folders/([a-zA-Z0-9-_]{25,50})"""),
+                        Regex("""id=([a-zA-Z0-9-_]{25,50}).*?folder""")
+                    )
+                    for (regex in folderRegexes) {
+                        regex.findAll(html).forEach { match ->
+                            val fid = match.groups[1]?.value.orEmpty()
+                            if (fid.isNotBlank() && visitedIds.add(fid)) {
+                                val details = getDriveItemDetails(fid, apiKey)
+                                val name = details?.name ?: "Subpasta"
+                                items.add(DriveItem(id = fid, name = name, mimeType = "application/vnd.google-apps.folder"))
+                            }
+                        }
+                    }
+
+                    // Spreadsheet / File links regex
+                    val fileRegexes = listOf(
+                        Regex("""/spreadsheets/d/([a-zA-Z0-9-_]{25,50})"""),
+                        Regex("""/file/d/([a-zA-Z0-9-_]{25,50})""")
+                    )
+                    for (regex in fileRegexes) {
+                        regex.findAll(html).forEach { match ->
+                            val fid = match.groups[1]?.value.orEmpty()
+                            if (fid.isNotBlank() && visitedIds.add(fid)) {
+                                val details = getDriveItemDetails(fid, apiKey)
+                                val name = details?.name ?: "Planilha"
+                                items.add(DriveItem(id = fid, name = name, mimeType = details?.mimeType ?: "application/vnd.google-apps.spreadsheet"))
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // Continue trying next URL
+            }
+        }
+        return items
     }
 
     private fun searchDriveByName(targetName: String, apiKey: String): List<DriveItem> {
@@ -556,19 +697,34 @@ class SpreadsheetRepository(
     }
 
     private suspend fun fetchDriveSpreadsheetData(id: String, mimeType: String, apiKey: String): SpreadsheetData? {
-        val exportUrl = if (mimeType == "application/vnd.google-apps.spreadsheet") {
-            "https://docs.google.com/spreadsheets/d/$id/export?format=xlsx"
-        } else {
-            "https://www.googleapis.com/drive/v3/files/$id?alt=media&key=$apiKey"
-        }
-        val res = fetchUrl(exportUrl)
-        if (res.isSuccess) return res.getOrNull()
+        val urlsToTry = mutableListOf<String>()
 
-        if (mimeType == "application/vnd.google-apps.spreadsheet") {
-            val apiExportUrl = "https://www.googleapis.com/drive/v3/files/$id/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&key=$apiKey"
-            val apiRes = fetchUrl(apiExportUrl)
-            if (apiRes.isSuccess) return apiRes.getOrNull()
+        // 1. Direct Sheets export as XLSX
+        urlsToTry.add("https://docs.google.com/spreadsheets/d/$id/export?format=xlsx")
+
+        // 2. Direct Google Drive file download (for uploaded Excel/CSV files)
+        urlsToTry.add("https://drive.google.com/uc?export=download&id=$id")
+        urlsToTry.add("https://drive.google.com/uc?id=$id&export=download")
+
+        // 3. Direct Sheets export as CSV
+        urlsToTry.add("https://docs.google.com/spreadsheets/d/$id/export?format=csv")
+
+        // 4. API Key media download & export
+        if (apiKey.isNotBlank()) {
+            urlsToTry.add("https://www.googleapis.com/drive/v3/files/$id?alt=media&key=$apiKey")
+            urlsToTry.add("https://www.googleapis.com/drive/v3/files/$id/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&key=$apiKey")
         }
+
+        for (url in urlsToTry) {
+            val res = fetchUrl(url)
+            if (res.isSuccess) {
+                val data = res.getOrNull()
+                if (data != null && data.sheetNames.isNotEmpty()) {
+                    return data
+                }
+            }
+        }
+
         return null
     }
 
