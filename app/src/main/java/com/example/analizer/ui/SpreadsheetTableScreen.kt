@@ -25,7 +25,6 @@ fun SpreadsheetTableScreen(
     spreadsheetData: SpreadsheetData?,
     config: AnalysisConfig,
     onConfigChanged: (AnalysisConfig) -> Unit,
-    onOpenSettings: () -> Unit = {},
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
@@ -72,12 +71,6 @@ fun SpreadsheetTableScreen(
             TopAppBar(
                 title = { Text("Dados da Planilha", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier
-                    ) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Configurações e Conta Google")
-                    }
                     IconButton(onClick = { onScreenSelected(Screen.Import) }) {
                         Icon(Icons.Rounded.FileUpload, contentDescription = "Importar Planilha")
                     }

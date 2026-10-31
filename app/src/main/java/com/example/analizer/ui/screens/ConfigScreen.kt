@@ -42,7 +42,6 @@ fun ConfigScreen(
     columnStats: List<com.example.analizer.model.ColumnStats> = emptyList(),
     onConfigChanged: (AnalysisConfig) -> Unit,
     onRunAnalysis: () -> Unit,
-    onOpenSettings: () -> Unit = {},
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
@@ -175,14 +174,7 @@ fun ConfigScreen(
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
                     }
                 },
-                actions = {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier
-                    ) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Configurações e Conta Google")
-                    }
-                },
+                actions = {},
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
                     titleContentColor = androidx.compose.ui.graphics.Color.White,

@@ -5,8 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.analizer.data.SpreadsheetRepository
-import com.example.analizer.data.UserSession
-import com.example.analizer.data.UserSessionManager
 import com.example.analizer.domain.StatisticsEngine
 import com.example.analizer.model.AnalysisConfig
 import com.example.analizer.model.ColumnRangeInterval
@@ -27,35 +25,6 @@ class AnalyzerViewModel(
 
     private val _spreadsheetData = MutableStateFlow<SpreadsheetData?>(null)
     val spreadsheetData: StateFlow<SpreadsheetData?> = _spreadsheetData.asStateFlow()
-
-    private val _userSession = MutableStateFlow(
-        UserSession(
-            isLoggedIn = false,
-            userEmail = "",
-            userName = "",
-            projectId = "gen-lang-client-0130244093",
-            oauthClientId = "391811116027-69jcq39i03ptgirlbi4ekgf2nqj5gbqs.apps.googleusercontent.com",
-            isDriveAuthorized = false
-        )
-    )
-    val userSession: StateFlow<UserSession> = _userSession.asStateFlow()
-
-    fun initSession(context: Context) {
-        val sessionManager = UserSessionManager.getInstance(context)
-        _userSession.value = sessionManager.session.value
-    }
-
-    fun login(context: Context, email: String, name: String = "", idToken: String = "") {
-        val sessionManager = UserSessionManager.getInstance(context)
-        sessionManager.login(email, name, idToken)
-        _userSession.value = sessionManager.session.value
-    }
-
-    fun logout(context: Context) {
-        val sessionManager = UserSessionManager.getInstance(context)
-        sessionManager.logout()
-        _userSession.value = sessionManager.session.value
-    }
 
     private val _analysisConfig = MutableStateFlow(AnalysisConfig())
     val analysisConfig: StateFlow<AnalysisConfig> = _analysisConfig.asStateFlow()
@@ -93,8 +62,7 @@ class AnalyzerViewModel(
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                val authToken = _userSession.value.idToken
-                val result = repository.fetchGoogleSheet(trimmedUrl, targetSpreadsheetName, authToken = authToken)
+                val result = repository.fetchGoogleSheet(trimmedUrl, targetSpreadsheetName)
                 _isLoading.value = false
                 result.onSuccess { data ->
                     try {

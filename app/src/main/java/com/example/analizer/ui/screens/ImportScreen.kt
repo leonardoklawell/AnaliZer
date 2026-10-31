@@ -35,7 +35,6 @@ fun ImportScreen(
     onFileSelected: (Context, Uri) -> Unit,
     onLoadSampleData: (String) -> Unit,
     onLoadSampleFolderData: () -> Unit = {},
-    onOpenSettings: () -> Unit = {},
     isLoading: Boolean,
     errorMessage: String?,
     onErrorDismiss: () -> Unit,
@@ -54,21 +53,9 @@ fun ImportScreen(
         topBar = {
             TopAppBar(
                 title = { Text("AnaliZer - Importar Dados", fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Settings,
-                            contentDescription = "Configurações e Conta Google"
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
-                    titleContentColor = androidx.compose.ui.graphics.Color.White,
-                    actionIconContentColor = androidx.compose.ui.graphics.Color(0xFFEBA036)
+                    titleContentColor = androidx.compose.ui.graphics.Color.White
                 )
             )
         },

@@ -39,7 +39,6 @@ fun AnalyticsScreen(
     columnStats: List<ColumnStats>,
     spreadsheetData: SpreadsheetData?,
     config: AnalysisConfig = AnalysisConfig(),
-    onOpenSettings: () -> Unit = {},
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
@@ -58,12 +57,6 @@ fun AnalyticsScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier
-                    ) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Configurações e Conta Google")
-                    }
                     IconButton(onClick = { onScreenSelected(Screen.Import) }) {
                         Icon(Icons.Rounded.FileUpload, contentDescription = "Importar Planilha")
                     }
