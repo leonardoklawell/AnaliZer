@@ -3,6 +3,8 @@ package com.example.analizer.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -10,13 +12,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.analizer.Screen
 import com.example.analizer.domain.StatisticsEngine
 import com.example.analizer.model.AnalysisConfig
@@ -25,14 +31,18 @@ import com.example.analizer.model.DisplayGroup
 import com.example.analizer.model.DisplayGroupItem
 import com.example.analizer.model.METRIC_OPTIONS
 import com.example.analizer.model.SpreadsheetData
+import kotlinx.coroutines.launch
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfigScreen(
     spreadsheetData: SpreadsheetData?,
     config: AnalysisConfig,
+    columnStats: List<com.example.analizer.model.ColumnStats> = emptyList(),
     onConfigChanged: (AnalysisConfig) -> Unit,
     onRunAnalysis: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
@@ -40,44 +50,61 @@ fun ConfigScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Configuração") },
+                    title = { Text("Configuração", fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = { onScreenSelected(Screen.Import) }) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
                         }
-                    }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
+                        titleContentColor = androidx.compose.ui.graphics.Color.White,
+                        navigationIconContentColor = androidx.compose.ui.graphics.Color.White
+                    )
                 )
             },
             bottomBar = {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525)
                 ) {
+                    val navItemColors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
+                        selectedTextColor = androidx.compose.ui.graphics.Color(0xFFEBA036),
+                        indicatorColor = androidx.compose.ui.graphics.Color(0xFFEBA036),
+                        unselectedIconColor = androidx.compose.ui.graphics.Color(0xFF8A99B5),
+                        unselectedTextColor = androidx.compose.ui.graphics.Color(0xFF8A99B5)
+                    )
                     NavigationBarItem(
                         selected = currentScreen is Screen.Import,
                         onClick = { onScreenSelected(Screen.Import) },
                         icon = { Icon(Icons.Rounded.FileUpload, contentDescription = "Importar") },
-                        label = { Text("Importar") }
+                        label = { Text("Importar") },
+                        colors = navItemColors
                     )
                     NavigationBarItem(
                         selected = currentScreen is Screen.Data,
                         onClick = { onScreenSelected(Screen.Data) },
                         icon = { Icon(Icons.Rounded.TableChart, contentDescription = "Dados") },
-                        label = { Text("Dados") }
+                        label = { Text("Dados") },
+                        colors = navItemColors
                     )
                     NavigationBarItem(
                         selected = currentScreen is Screen.Config,
                         onClick = { onScreenSelected(Screen.Config) },
                         icon = { Icon(Icons.Rounded.Tune, contentDescription = "Configurar") },
-                        label = { Text("Configurar") }
+                        label = { Text("Configurar") },
+                        colors = navItemColors
                     )
                     NavigationBarItem(
                         selected = currentScreen is Screen.Analytics,
                         onClick = { onScreenSelected(Screen.Analytics) },
                         icon = { Icon(Icons.Rounded.Analytics, contentDescription = "Análise") },
-                        label = { Text("Análise") }
+                        label = { Text("Análise") },
+                        colors = navItemColors
                     )
                 }
-            }
+            },
+            containerColor = androidx.compose.ui.graphics.Color(0xFFF5E8C7)
         ) { padding ->
             Box(
                 modifier = Modifier
@@ -130,610 +157,633 @@ fun ConfigScreen(
     val headerRow = currentSheetRows.getOrNull(headerRowIndex) ?: emptyList()
     val totalCols = headerRow.size.takeIf { it > 0 } ?: (currentSheetRows.maxOfOrNull { it.size } ?: 0)
 
-    var sheetExpanded by remember { mutableStateOf(false) }
-
     val displayGroups = if (config.displayGroups.isNotEmpty()) {
         config.displayGroups
     } else {
         config.effectiveDisplayGroups
     }
 
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val coroutineScope = rememberCoroutineScope()
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Configuração de Grupos de Exibição", fontWeight = FontWeight.Bold) },
+                title = { Text("Configuração de Grupos", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { onScreenSelected(Screen.Import) }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
                     }
                 },
+                actions = {
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier
+                    ) {
+                        Icon(Icons.Rounded.Settings, contentDescription = "Configurações e Conta Google")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
+                    titleContentColor = androidx.compose.ui.graphics.Color.White,
+                    navigationIconContentColor = androidx.compose.ui.graphics.Color.White,
+                    actionIconContentColor = androidx.compose.ui.graphics.Color(0xFFEBA036)
                 )
             )
         },
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525)
             ) {
+                val navItemColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
+                    selectedTextColor = androidx.compose.ui.graphics.Color(0xFFEBA036),
+                    indicatorColor = androidx.compose.ui.graphics.Color(0xFFEBA036),
+                    unselectedIconColor = androidx.compose.ui.graphics.Color(0xFF8A99B5),
+                    unselectedTextColor = androidx.compose.ui.graphics.Color(0xFF8A99B5)
+                )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Import,
                     onClick = { onScreenSelected(Screen.Import) },
                     icon = { Icon(Icons.Rounded.FileUpload, contentDescription = "Importar") },
-                    label = { Text("Importar") }
+                    label = { Text("Importar") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Data,
                     onClick = { onScreenSelected(Screen.Data) },
                     icon = { Icon(Icons.Rounded.TableChart, contentDescription = "Dados") },
-                    label = { Text("Dados") }
+                    label = { Text("Dados") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Config,
                     onClick = { onScreenSelected(Screen.Config) },
                     icon = { Icon(Icons.Rounded.Tune, contentDescription = "Configurar") },
-                    label = { Text("Configurar") }
+                    label = { Text("Configurar") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Analytics,
                     onClick = { onScreenSelected(Screen.Analytics) },
                     icon = { Icon(Icons.Rounded.Analytics, contentDescription = "Análise") },
-                    label = { Text("Análise") }
+                    label = { Text("Análise") },
+                    colors = navItemColors
                 )
             }
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = androidx.compose.ui.graphics.Color(0xFFF5E8C7)
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Worksheet Selection Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
+            TabRow(
+                selectedTabIndex = pagerState.currentPage,
+                containerColor = Color(0xFFF5E8C7),
+                contentColor = Color(0xFF0D1525),
+                indicator = { tabPositions ->
+                    if (pagerState.currentPage < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                            color = Color(0xFFEBA036)
+                        )
+                    }
+                },
+                divider = {}
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Aba da Planilha Principal",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    ExposedDropdownMenuBox(
-                        expanded = sheetExpanded,
-                        onExpandedChange = { sheetExpanded = !sheetExpanded }
-                    ) {
-                        OutlinedTextField(
-                            value = currentSheetName,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Selecione a Aba Principal") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sheetExpanded) },
-                            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        ExposedDropdownMenu(
-                            expanded = sheetExpanded,
-                            onDismissRequest = { sheetExpanded = false }
-                        ) {
-                            sheetNames.forEach { sheet ->
-                                DropdownMenuItem(
-                                    text = { Text(sheet) },
-                                    onClick = {
-                                        sheetExpanded = false
-                                        val rows = spreadsheetData.sheets[sheet] ?: emptyList()
-                                        val colCount = rows.firstOrNull()?.size ?: 0
-                                        val cols = (0 until colCount).toList()
-
-                                        onConfigChanged(
-                                            config.copy(
-                                                sheetName = sheet,
-                                                selectedColumnIndices = cols,
-                                                startRow = if (rows.size > 1) 1 else 0,
-                                                endRow = if (rows.isNotEmpty()) rows.size - 1 else 0
-                                            )
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    if (sheetNames.size > 1) {
-                        Text(
-                            text = "Abas encontradas (${sheetNames.size}): ${sheetNames.joinToString(", ")}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                Tab(
+                    selected = pagerState.currentPage == 0,
+                    onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                    text = { Text("Configuração de Grupos", fontWeight = FontWeight.SemiBold) },
+                    selectedContentColor = Color(0xFF0D1525),
+                    unselectedContentColor = Color(0xFF788497)
+                )
+                Tab(
+                    selected = pagerState.currentPage == 1,
+                    onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                    text = { Text("Configuração de Cards", fontWeight = FontWeight.SemiBold) },
+                    selectedContentColor = Color(0xFF0D1525),
+                    unselectedContentColor = Color(0xFF788497)
+                )
             }
 
-            // Global Row Range & Header Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text(
-                        text = "Intervalo de Linhas e Cabeçalho",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = config.headerRowIndex.toString(),
-                            onValueChange = { input ->
-                                val parsed = input.toIntOrNull() ?: 0
-                                onConfigChanged(config.copy(headerRowIndex = parsed.coerceIn(0, maxRowIndex)))
-                            },
-                            label = { Text("Linha do Cabeçalho") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = config.startRow.toString(),
-                            onValueChange = { input ->
-                                val parsed = input.toIntOrNull() ?: 0
-                                onConfigChanged(config.copy(startRow = parsed.coerceIn(0, maxRowIndex)))
-                            },
-                            label = { Text("Linha Inicial Global") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = config.endRow.toString(),
-                            onValueChange = { input ->
-                                val parsed = input.toIntOrNull() ?: maxRowIndex
-                                onConfigChanged(config.copy(endRow = parsed.coerceIn(0, maxRowIndex)))
-                            },
-                            label = { Text("Linha Final Global") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-                    }
-                    Text(
-                        text = "Total de linhas na planilha: ${currentSheetRows.size} (Índices 0 a $maxRowIndex)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Display Groups Container Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Grupos de Exibição",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Organize suas análises em Grupos de Exibição com nome em texto ou por célula, múltiplas abas e sub-intervalos.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    if (displayGroups.isEmpty()) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) { page ->
+                when (page) {
+                    0 -> {
+                        // Tab 0: General settings, display groups, positioning, charts
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp),
-                                contentAlignment = Alignment.Center
+                            // Display Groups Container Card
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp)
                             ) {
-                                Text(
-                                    text = "Nenhum grupo configurado. Clique abaixo para adicionar.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Text(
+                                        text = "Grupos de Exibição",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Cada grupo contém a pasta, aba da planilha, nome do grupo e seus itens que compõem os cards.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    if (displayGroups.isEmpty()) {
+                                        Card(
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                            ),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "Nenhum grupo configurado.",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        displayGroups.forEachIndexed { index, group ->
+                                            DisplayGroupCard(
+                                                group = group,
+                                                groupIndex = index,
+                                                spreadsheetData = spreadsheetData,
+                                                sheets = spreadsheetData?.sheets ?: emptyMap(),
+                                                sheetNames = sheetNames,
+                                                currentGlobalSheet = currentSheetName,
+                                                headerRowIndex = headerRowIndex,
+                                                customColumnTitles = config.customColumnTitles,
+                                                globalStartRow = config.startRow,
+                                                globalEndRow = config.endRow,
+                                                maxRowIndex = maxRowIndex,
+                                                onUpdateGroup = { updatedGroup ->
+                                                    val updatedList = displayGroups.toMutableList().apply {
+                                                        set(index, updatedGroup)
+                                                    }
+                                                    onConfigChanged(config.copy(displayGroups = updatedList))
+                                                },
+                                                onDeleteGroup = {
+                                                    val updatedList = displayGroups.toMutableList().apply {
+                                                        removeAt(index)
+                                                    }
+                                                    onConfigChanged(config.copy(displayGroups = updatedList))
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            val newGroup = DisplayGroup(
+                                                name = "Grupo ${displayGroups.size + 1}",
+                                                selectedSheets = listOf(currentSheetName),
+                                                displayOrder = displayGroups.size,
+                                                items = listOf(
+                                                    DisplayGroupItem(
+                                                        startColumn = 0,
+                                                        endColumn = (totalCols - 1).coerceAtLeast(0),
+                                                        startRow = null,
+                                                        endRow = null,
+                                                        metric = "Média"
+                                                    )
+                                                )
+                                            )
+                                            onConfigChanged(config.copy(displayGroups = displayGroups + newGroup))
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.Add, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Adicionar Grupo de Exibição")
+                                    }
+                                }
+                            }
+
+                            // Group Ordering & Selection Card
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Text(
+                                        text = "Posicionamento e Seleção para Análise",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
+                                    displayGroups.forEachIndexed { index, group ->
+                                        val groupName = when (group.nameSourceType) {
+                                            "CELL" -> "Célula ${group.cellReference}"
+                                            "SHEET", "SHEET_NAME", "ABANOME" -> group.selectedSheets.firstOrNull() ?: currentSheetName
+                                            else -> group.name.ifBlank { "Grupo ${index + 1}" }
+                                        }
+                                        Card(
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(8.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Checkbox(
+                                                        checked = group.enabledForAnalysis,
+                                                        onCheckedChange = { checked ->
+                                                            val updated = displayGroups.mapIndexed { idx, g ->
+                                                                if (idx == index) g.copy(enabledForAnalysis = checked) else g
+                                                            }
+                                                            onConfigChanged(config.copy(displayGroups = updated))
+                                                        }
+                                                    )
+                                                    Text(
+                                                        text = "${index + 1}. $groupName",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            if (index > 0) {
+                                                                val mutable = displayGroups.toMutableList()
+                                                                val item = mutable.removeAt(index)
+                                                                mutable.add(index - 1, item)
+                                                                val reordered = mutable.mapIndexed { newIdx, g -> g.copy(displayOrder = newIdx) }
+                                                                onConfigChanged(config.copy(displayGroups = reordered))
+                                                            }
+                                                        },
+                                                        enabled = index > 0
+                                                    ) {
+                                                        Icon(Icons.Rounded.ArrowUpward, contentDescription = "Subir")
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
+                                                            if (index < displayGroups.size - 1) {
+                                                                val mutable = displayGroups.toMutableList()
+                                                                val item = mutable.removeAt(index)
+                                                                mutable.add(index + 1, item)
+                                                                val reordered = mutable.mapIndexed { newIdx, g -> g.copy(displayOrder = newIdx) }
+                                                                onConfigChanged(config.copy(displayGroups = reordered))
+                                                            }
+                                                        },
+                                                        enabled = index < displayGroups.size - 1
+                                                    ) {
+                                                        Icon(Icons.Rounded.ArrowDownward, contentDescription = "Descer")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Chart Group Comparison Card
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Text(
+                                        text = "Seleção de Grupos para Gráficos",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
+                                    displayGroups.forEachIndexed { index, group ->
+                                        val groupName = when (group.nameSourceType) {
+                                            "CELL" -> "Célula ${group.cellReference}"
+                                            "SHEET", "SHEET_NAME", "ABANOME" -> group.selectedSheets.firstOrNull() ?: currentSheetName
+                                            else -> group.name.ifBlank { "Grupo ${index + 1}" }
+                                        }
+                                        val isSelected = config.chartSelectedGroupIds.contains(groupName) || config.chartSelectedGroupIds.contains(group.id)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    val currentSelected = config.chartSelectedGroupIds
+                                                    val newSelected = if (isSelected) {
+                                                        currentSelected.filter { it != groupName && it != group.id }
+                                                    } else {
+                                                        currentSelected + groupName
+                                                    }
+                                                    onConfigChanged(config.copy(chartSelectedGroupIds = newSelected))
+                                                },
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Checkbox(
+                                                checked = isSelected,
+                                                onCheckedChange = { checked ->
+                                                    val currentSelected = config.chartSelectedGroupIds
+                                                    val newSelected = if (checked) {
+                                                        currentSelected + groupName
+                                                    } else {
+                                                        currentSelected.filter { it != groupName && it != group.id }
+                                                    }
+                                                    onConfigChanged(config.copy(chartSelectedGroupIds = newSelected))
+                                                }
+                                            )
+                                            Text(text = groupName, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Run Analysis Button
+                            Button(
+                                onClick = {
+                                    onRunAnalysis()
+                                    onScreenSelected(Screen.Analytics)
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
                                 )
+                            ) {
+                                Icon(Icons.Rounded.Analytics, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Executar Análise e Ver Resultados", fontWeight = FontWeight.Bold)
                             }
                         }
-                    } else {
-                        displayGroups.forEachIndexed { index, group ->
-                            DisplayGroupCard(
-                                group = group,
-                                groupIndex = index,
-                                sheets = spreadsheetData.sheets,
-                                sheetNames = sheetNames,
-                                currentGlobalSheet = currentSheetName,
-                                headerRowIndex = headerRowIndex,
-                                customColumnTitles = config.customColumnTitles,
-                                globalStartRow = config.startRow,
-                                globalEndRow = config.endRow,
-                                maxRowIndex = maxRowIndex,
-                                onUpdateGroup = { updatedGroup ->
-                                    val updatedList = displayGroups.toMutableList().apply {
-                                        set(index, updatedGroup)
-                                    }
-                                    onConfigChanged(config.copy(displayGroups = updatedList))
-                                },
-                                onDeleteGroup = {
-                                    val updatedList = displayGroups.toMutableList().apply {
-                                        removeAt(index)
-                                    }
-                                    onConfigChanged(config.copy(displayGroups = updatedList))
-                                }
-                            )
-                        }
                     }
+                    1 -> {
+                        // Tab 1: Card Configuration with option to create/edit/delete cards, each with its viewer and 14 fields (2 per row)
+                        val cards = config.effectiveCards
 
-                    // Add Group Button
-                    OutlinedButton(
-                        onClick = {
-                            val newGroup = DisplayGroup(
-                                name = "Grupo ${displayGroups.size + 1}",
-                                selectedSheets = listOf(currentSheetName),
-                                displayOrder = displayGroups.size,
-                                items = listOf(
-                                    DisplayGroupItem(
-                                        startColumn = 0,
-                                        endColumn = (totalCols - 1).coerceAtLeast(0),
-                                        startRow = null,
-                                        endRow = null,
-                                        metric = "Média"
-                                    )
-                                )
-                            )
-                            onConfigChanged(config.copy(displayGroups = displayGroups + newGroup))
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Rounded.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Adicionar Grupo de Exibição")
-                    }
-                }
-            }
-
-            // Group Ordering & Selection Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Posicionamento e Seleção para Análise",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Escolha quais grupos devem participar da análise e reordene a posição em que aparecem nos cards e gráficos.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    displayGroups.forEachIndexed { index, group ->
-                        val groupName = if (group.nameSourceType == "CELL") "Célula ${group.cellReference}" else (group.name.ifBlank { "Grupo ${index + 1}" })
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Checkbox(
-                                        checked = group.enabledForAnalysis,
-                                        onCheckedChange = { checked ->
-                                            val updated = displayGroups.mapIndexed { idx, g ->
-                                                if (idx == index) g.copy(enabledForAnalysis = checked) else g
-                                            }
-                                            onConfigChanged(config.copy(displayGroups = updated))
-                                        }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Configuração e Visualização de Cards",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        text = "${index + 1}. $groupName",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold
+                                        text = "Crie, edite ou remova cards. Cada card tem 14 campos (2 por linha) vinculados aos itens do grupo selecionado.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(
-                                        onClick = {
-                                            if (index > 0) {
-                                                val mutable = displayGroups.toMutableList()
-                                                val item = mutable.removeAt(index)
-                                                mutable.add(index - 1, item)
-                                                val reordered = mutable.mapIndexed { newIdx, g -> g.copy(displayOrder = newIdx) }
-                                                onConfigChanged(config.copy(displayGroups = reordered))
-                                            }
-                                        },
-                                        enabled = index > 0
-                                    ) {
-                                        Icon(Icons.Rounded.ArrowUpward, contentDescription = "Mover para Cima")
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            if (index < displayGroups.size - 1) {
-                                                val mutable = displayGroups.toMutableList()
-                                                val item = mutable.removeAt(index)
-                                                mutable.add(index + 1, item)
-                                                val reordered = mutable.mapIndexed { newIdx, g -> g.copy(displayOrder = newIdx) }
-                                                onConfigChanged(config.copy(displayGroups = reordered))
-                                            }
-                                        },
-                                        enabled = index < displayGroups.size - 1
-                                    ) {
-                                        Icon(Icons.Rounded.ArrowDownward, contentDescription = "Mover para Baixo")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Chart Group Comparison Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Seleção de Grupos para Gráficos",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Escolha quais grupos serão comparados nos gráficos (se nenhum for marcado, todos os ativos serão comparados).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    displayGroups.forEachIndexed { index, group ->
-                        val groupName = if (group.nameSourceType == "CELL") "Célula ${group.cellReference}" else (group.name.ifBlank { "Grupo ${index + 1}" })
-                        val isSelected = config.chartSelectedGroupIds.contains(groupName) || config.chartSelectedGroupIds.contains(group.id)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val currentSelected = config.chartSelectedGroupIds
-                                    val newSelected = if (isSelected) {
-                                        currentSelected.filter { it != groupName && it != group.id }
-                                    } else {
-                                        currentSelected + groupName
-                                    }
-                                    onConfigChanged(config.copy(chartSelectedGroupIds = newSelected))
-                                },
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Checkbox(
-                                checked = isSelected,
-                                onCheckedChange = { checked ->
-                                    val currentSelected = config.chartSelectedGroupIds
-                                    val newSelected = if (checked) {
-                                        currentSelected + groupName
-                                    } else {
-                                        currentSelected.filter { it != groupName && it != group.id }
-                                    }
-                                    onConfigChanged(config.copy(chartSelectedGroupIds = newSelected))
-                                }
-                            )
-                            Text(text = groupName, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-            }
-
-            // Card Field Mappings Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Configuração de Campos do Card",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Personalize os títulos e vincule grupos e métricas a cada um dos 6 campos dos cards de análise.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    val defaultFieldNames = listOf("Média", "Mediana", "Desv. Padrão", "Mín / Máx", "Soma", "Contagem")
-                    for (fieldIdx in 0..5) {
-                        val mapping = config.cardFieldMappings.find { it.fieldIndex == fieldIdx }
-                        val customTitle = mapping?.customTitle ?: ""
-                        val selectedGroupId = mapping?.groupId ?: ""
-                        val selectedMetric = mapping?.metric ?: "Média"
-
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "Campo ${fieldIdx + 1} (Padrão: ${defaultFieldNames[fieldIdx]})",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                OutlinedTextField(
-                                    value = customTitle,
-                                    onValueChange = { newTitle ->
-                                        val mutableMappings = config.cardFieldMappings.toMutableList()
-                                        val existingIndex = mutableMappings.indexOfFirst { it.fieldIndex == fieldIdx }
-                                        if (existingIndex >= 0) {
-                                            mutableMappings[existingIndex] = mutableMappings[existingIndex].copy(customTitle = newTitle)
-                                        } else {
-                                            mutableMappings.add(CardFieldMapping(fieldIndex = fieldIdx, customTitle = newTitle, groupId = selectedGroupId, metric = selectedMetric))
-                                        }
-                                        onConfigChanged(config.copy(cardFieldMappings = mutableMappings))
-                                    },
-                                    label = { Text("Título Personalizado") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-
-                                // Group Link Dropdown
-                                var groupDropdownExpanded by remember { mutableStateOf(false) }
-                                val linkedGroupName = displayGroups.find { it.id == selectedGroupId || it.name == selectedGroupId }?.let {
-                                    if (it.nameSourceType == "CELL") "Célula ${it.cellReference}" else it.name
-                                } ?: "Grupo Padrão"
-
-                                ExposedDropdownMenuBox(
-                                    expanded = groupDropdownExpanded,
-                                    onExpandedChange = { groupDropdownExpanded = !groupDropdownExpanded },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    OutlinedTextField(
-                                        value = linkedGroupName,
-                                        onValueChange = {},
-                                        readOnly = true,
-                                        label = { Text("Grupo Vinculado") },
-                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupDropdownExpanded) },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    ExposedDropdownMenu(
-                                        expanded = groupDropdownExpanded,
-                                        onDismissRequest = { groupDropdownExpanded = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Grupo Padrão (Automático)") },
-                                            onClick = {
-                                                groupDropdownExpanded = false
-                                                val mutableMappings = config.cardFieldMappings.toMutableList()
-                                                val existingIndex = mutableMappings.indexOfFirst { it.fieldIndex == fieldIdx }
-                                                val gId = ""
-                                                if (existingIndex >= 0) {
-                                                    mutableMappings[existingIndex] = mutableMappings[existingIndex].copy(groupId = gId)
-                                                } else {
-                                                    mutableMappings.add(CardFieldMapping(fieldIndex = fieldIdx, customTitle = customTitle, groupId = gId, metric = selectedMetric))
-                                                }
-                                                onConfigChanged(config.copy(cardFieldMappings = mutableMappings))
-                                            }
+                                Button(
+                                    onClick = {
+                                        val newCard = com.example.analizer.model.CardConfig(
+                                            groupId = displayGroups.firstOrNull()?.id ?: ""
                                         )
-                                        displayGroups.forEach { grp ->
-                                            val gName = if (grp.nameSourceType == "CELL") "Célula ${grp.cellReference}" else grp.name.ifBlank { "Grupo" }
-                                            DropdownMenuItem(
-                                                text = { Text(gName) },
-                                                onClick = {
-                                                    groupDropdownExpanded = false
-                                                    val mutableMappings = config.cardFieldMappings.toMutableList()
-                                                    val existingIndex = mutableMappings.indexOfFirst { it.fieldIndex == fieldIdx }
-                                                    if (existingIndex >= 0) {
-                                                        mutableMappings[existingIndex] = mutableMappings[existingIndex].copy(groupId = grp.id)
-                                                    } else {
-                                                        mutableMappings.add(CardFieldMapping(fieldIndex = fieldIdx, customTitle = customTitle, groupId = grp.id, metric = selectedMetric))
-                                                    }
-                                                    onConfigChanged(config.copy(cardFieldMappings = mutableMappings))
-                                                }
-                                            )
-                                        }
-                                    }
+                                        onConfigChanged(config.copy(cards = cards + newCard))
+                                    },
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Rounded.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Adicionar Card")
                                 }
+                            }
 
-                                // Metric Dropdown for this field
-                                var metricDropdownExpanded by remember { mutableStateOf(false) }
-                                ExposedDropdownMenuBox(
-                                    expanded = metricDropdownExpanded,
-                                    onExpandedChange = { metricDropdownExpanded = !metricDropdownExpanded },
+                            if (cards.isEmpty()) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    OutlinedTextField(
-                                        value = selectedMetric,
-                                        onValueChange = {},
-                                        readOnly = true,
-                                        label = { Text("Métrica do Campo") },
-                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = metricDropdownExpanded) },
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    ExposedDropdownMenu(
-                                        expanded = metricDropdownExpanded,
-                                        onDismissRequest = { metricDropdownExpanded = false }
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        METRIC_OPTIONS.forEach { met ->
-                                            DropdownMenuItem(
-                                                text = { Text(met) },
-                                                onClick = {
-                                                    metricDropdownExpanded = false
-                                                    val mutableMappings = config.cardFieldMappings.toMutableList()
-                                                    val existingIndex = mutableMappings.indexOfFirst { it.fieldIndex == fieldIdx }
-                                                    if (existingIndex >= 0) {
-                                                        mutableMappings[existingIndex] = mutableMappings[existingIndex].copy(metric = met)
-                                                    } else {
-                                                        mutableMappings.add(CardFieldMapping(fieldIndex = fieldIdx, customTitle = customTitle, groupId = selectedGroupId, metric = met))
+                                        Text(
+                                            text = "Nenhum card configurado. Adicione um card acima.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            } else {
+                                cards.forEachIndexed { cardIdx, cardConfig ->
+                                    val linkedGroup = displayGroups.find { it.id == cardConfig.groupId || it.name == cardConfig.groupId }
+                                    val cardTitle = resolveGroupName(linkedGroup, spreadsheetData, currentSheetName, cardIdx)
+
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                                        ) {
+                                            // Card Header with Duplicate and Delete buttons
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Card ${cardIdx + 1}: $cardTitle",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    FilledTonalButton(
+                                                        onClick = {
+                                                            val duplicatedCard = cardConfig.copy(
+                                                                id = java.util.UUID.randomUUID().toString(),
+                                                                fieldMappings = cardConfig.fieldMappings.map {
+                                                                    it.copy(id = java.util.UUID.randomUUID().toString())
+                                                                }
+                                                            )
+                                                            val updatedCards = cards.toMutableList()
+                                                            updatedCards.add(cardIdx + 1, duplicatedCard)
+                                                            onConfigChanged(config.copy(cards = updatedCards))
+                                                        },
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        modifier = Modifier
+                                                            .height(34.dp)
+                                                            .testTag("duplicate_card_$cardIdx")
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.ContentCopy,
+                                                            contentDescription = "Duplicar Card",
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("Duplicar", fontSize = 12.sp)
                                                     }
-                                                    onConfigChanged(config.copy(cardFieldMappings = mutableMappings))
+                                                    IconButton(
+                                                        onClick = {
+                                                            val updatedCards = cards.toMutableList().apply { removeAt(cardIdx) }
+                                                            onConfigChanged(config.copy(cards = updatedCards))
+                                                        },
+                                                        modifier = Modifier.testTag("delete_card_$cardIdx")
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Delete,
+                                                            contentDescription = "Excluir Card",
+                                                            tint = MaterialTheme.colorScheme.error
+                                                        )
+                                                    }
                                                 }
+                                            }
+
+                                            // Live Card Preview Viewer (Matching image.png original appearance exactly)
+                                            AnalysisStatCard(
+                                                cardConfig = cardConfig,
+                                                columnStats = columnStats,
+                                                displayGroups = displayGroups,
+                                                spreadsheetData = spreadsheetData,
+                                                currentSheetName = currentSheetName,
+                                                cardIndex = cardIdx
                                             )
+
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                                            // Card Group Selection (Card Title Source)
+                                            var cardGroupExpanded by remember { mutableStateOf(false) }
+                                            ExposedDropdownMenuBox(
+                                                expanded = cardGroupExpanded,
+                                                onExpandedChange = { cardGroupExpanded = !cardGroupExpanded },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = cardTitle,
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text("Grupo Selecionado (Título do Card)") },
+                                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = cardGroupExpanded) },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    singleLine = true,
+                                                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                                                )
+                                                ExposedDropdownMenu(
+                                                    expanded = cardGroupExpanded,
+                                                    onDismissRequest = { cardGroupExpanded = false }
+                                                ) {
+                                                    displayGroups.forEach { grp ->
+                                                        val gName = resolveGroupName(grp, spreadsheetData, currentSheetName)
+                                                        DropdownMenuItem(
+                                                            text = { Text(gName) },
+                                                            onClick = {
+                                                                cardGroupExpanded = false
+                                                                val updatedCards = cards.toMutableList()
+                                                                updatedCards[cardIdx] = cardConfig.copy(groupId = grp.id)
+                                                                onConfigChanged(config.copy(cards = updatedCards))
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            // Edit 14 Fields of this card (2 per row)
+                                            Text(
+                                                text = "Editar 14 Campos do Card (2 por linha)",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+
+                                            for (i in 0 until 14 step 2) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Box(modifier = Modifier.weight(1f)) {
+                                                        CardFieldConfigCard(
+                                                            fieldIndex = i,
+                                                            cardConfig = cardConfig,
+                                                            cardIdx = cardIdx,
+                                                            cards = cards,
+                                                            displayGroups = displayGroups,
+                                                            linkedGroup = linkedGroup,
+                                                            config = config,
+                                                            onConfigChanged = onConfigChanged
+                                                        )
+                                                    }
+                                                    Box(modifier = Modifier.weight(1f)) {
+                                                        if (i + 1 < 14) {
+                                                            CardFieldConfigCard(
+                                                                fieldIndex = i + 1,
+                                                                cardConfig = cardConfig,
+                                                                cardIdx = cardIdx,
+                                                                cards = cards,
+                                                                displayGroups = displayGroups,
+                                                                linkedGroup = linkedGroup,
+                                                                config = config,
+                                                                onConfigChanged = onConfigChanged
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -742,26 +792,6 @@ fun ConfigScreen(
                     }
                 }
             }
-
-            // Run Analysis Button
-            Button(
-                onClick = {
-                    onRunAnalysis()
-                    onScreenSelected(Screen.Analytics)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Icon(Icons.Rounded.Analytics, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Executar Análise e Ver Resultados", fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -771,6 +801,7 @@ fun ConfigScreen(
 fun DisplayGroupCard(
     group: DisplayGroup,
     groupIndex: Int,
+    spreadsheetData: SpreadsheetData?,
     sheets: Map<String, List<List<String>>>,
     sheetNames: List<String>,
     currentGlobalSheet: String,
@@ -782,38 +813,42 @@ fun DisplayGroupCard(
     onUpdateGroup: (DisplayGroup) -> Unit,
     onDeleteGroup: () -> Unit
 ) {
-    val effectiveSheet = group.selectedSheets.firstOrNull() ?: currentGlobalSheet
-    val sheetRows = sheets[effectiveSheet] ?: emptyList()
+    val folderNames = spreadsheetData?.folderNames ?: emptyList()
+    val currentFolder = group.selectedFolder.ifBlank { folderNames.firstOrNull() ?: "" }
+    val folderSheetNames = if (currentFolder.isNotBlank()) spreadsheetData?.getSheetNamesForFolder(currentFolder) ?: sheetNames else sheetNames
+    val effectiveSheet = group.selectedSheets.firstOrNull() ?: folderSheetNames.firstOrNull() ?: currentGlobalSheet
+    val sheetRows = if (currentFolder.isNotBlank()) {
+        spreadsheetData?.getRows(currentFolder, effectiveSheet) ?: (sheets[effectiveSheet] ?: emptyList())
+    } else {
+        sheets[effectiveSheet] ?: emptyList()
+    }
     val safeHeaderRowIndex = headerRowIndex.coerceIn(0, maxOf(0, maxRowIndex))
     val headerRow = sheetRows.getOrNull(safeHeaderRowIndex) ?: emptyList()
     val totalCols = headerRow.size.takeIf { it > 0 } ?: (sheetRows.maxOfOrNull { it.size } ?: 0)
 
-    val resolvedName = if (group.nameSourceType == "CELL") {
-        StatisticsEngine().resolveCellText(sheetRows, group.cellReference) ?: "(Célula vazia/inválida)"
-    } else {
-        group.name.ifBlank { "Grupo ${groupIndex + 1}" }
+    val resolvedName = when (group.nameSourceType) {
+        "CELL" -> StatisticsEngine().resolveCellText(sheetRows, group.cellReference) ?: "(Célula vazia/inválida)"
+        "SHEET", "SHEET_NAME", "ABANOME" -> effectiveSheet
+        else -> group.name.ifBlank { if (currentFolder.isNotBlank()) currentFolder else "Grupo ${groupIndex + 1}" }
     }
 
     var nameTypeExpanded by remember { mutableStateOf(false) }
-    val nameTypeLabel = if (group.nameSourceType == "CELL") "Pegar de Célula" else "Texto"
-
-    var sheetsDropdownExpanded by remember { mutableStateOf(false) }
-    val sheetsSummaryText = if (group.selectedSheets.isEmpty()) {
-        "Aba Global ($currentGlobalSheet)"
-    } else {
-        group.selectedSheets.joinToString(", ")
+    val nameTypeLabel = when (group.nameSourceType) {
+        "CELL" -> "Célula"
+        "SHEET", "SHEET_NAME", "ABANOME" -> "Aba"
+        else -> "Texto"
     }
 
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header
             Row(
@@ -846,125 +881,191 @@ fun DisplayGroupCard(
                 }
             }
 
-            // Name Source Type Dropdown (Texto vs Pegar de Célula)
-            ExposedDropdownMenuBox(
-                expanded = nameTypeExpanded,
-                onExpandedChange = { nameTypeExpanded = !nameTypeExpanded },
-                modifier = Modifier.fillMaxWidth()
+            // a - um dropdown, para escolher entre as pastas encontradas, que contem planilhas encontradas.
+            // b - ao lado, um dropdown exibindo as abas da planilha dentro da pasta escolhida.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = nameTypeLabel,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Origem do Nome do Grupo") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = nameTypeExpanded) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-                    shape = RoundedCornerShape(10.dp)
-                )
-                ExposedDropdownMenu(
-                    expanded = nameTypeExpanded,
-                    onDismissRequest = { nameTypeExpanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Texto") },
-                        onClick = {
-                            nameTypeExpanded = false
-                            onUpdateGroup(group.copy(nameSourceType = "TEXT"))
+                // Dropdown Pasta Mãe
+                Box(modifier = Modifier.weight(1f)) {
+                    var folderExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = folderExpanded,
+                        onExpandedChange = { folderExpanded = !folderExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = if (folderNames.isNotEmpty()) currentFolder else "Principal",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Pasta Mãe", fontSize = 11.sp) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = folderExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = folderExpanded,
+                            onDismissRequest = { folderExpanded = false }
+                        ) {
+                            val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Principal")
+                            displayFolders.forEach { folder ->
+                                DropdownMenuItem(
+                                    text = { Text(folder) },
+                                    onClick = {
+                                        folderExpanded = false
+                                        val fSheets = spreadsheetData?.getSheetNamesForFolder(folder) ?: sheetNames
+                                        val newSheet = fSheets.firstOrNull() ?: ""
+                                        onUpdateGroup(
+                                            group.copy(
+                                                selectedFolder = folder,
+                                                selectedSheets = if (newSheet.isNotBlank()) listOf(newSheet) else emptyList(),
+                                                name = if (group.nameSourceType == "TEXT" && (group.name.isBlank() || group.name.startsWith("Grupo ") || folderNames.contains(group.name))) folder else group.name
+                                            )
+                                        )
+                                    }
+                                )
+                            }
                         }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Pegar de Célula") },
-                        onClick = {
-                            nameTypeExpanded = false
-                            onUpdateGroup(group.copy(nameSourceType = "CELL"))
+                    }
+                }
+
+                // Dropdown Aba da Planilha
+                Box(modifier = Modifier.weight(1f)) {
+                    var sheetExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = sheetExpanded,
+                        onExpandedChange = { sheetExpanded = !sheetExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = effectiveSheet.ifBlank { "Padrão" },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Aba da Planilha", fontSize = 11.sp) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sheetExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = sheetExpanded,
+                            onDismissRequest = { sheetExpanded = false }
+                        ) {
+                            val displaySheets = if (folderSheetNames.isNotEmpty()) folderSheetNames else listOf("Padrão")
+                            displaySheets.forEach { sheet ->
+                                DropdownMenuItem(
+                                    text = { Text(sheet) },
+                                    onClick = {
+                                        sheetExpanded = false
+                                        onUpdateGroup(group.copy(selectedSheets = listOf(sheet)))
+                                    }
+                                )
+                            }
                         }
-                    )
+                    }
                 }
             }
 
-            if (group.nameSourceType != "CELL") {
-                OutlinedTextField(
-                    value = group.name,
-                    onValueChange = { onUpdateGroup(group.copy(name = it)) },
-                    label = { Text("Nome do Grupo (Texto)") },
-                    placeholder = { Text("ex: Resumo Financeiro (ou deixe em branco)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(10.dp)
-                )
-            } else {
-                OutlinedTextField(
-                    value = group.cellReference,
-                    onValueChange = { onUpdateGroup(group.copy(cellReference = it)) },
-                    label = { Text("Referência da Célula (ex: A1)") },
-                    placeholder = { Text("ex: B2") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
-                    supportingText = {
-                        val textFound = StatisticsEngine().resolveCellText(sheetRows, group.cellReference)
-                        Text(if (textFound != null) "Texto encontrado: $textFound" else "Célula não encontrada ou vazia")
-                    }
-                )
-            }
-
-            // Sheets Dropdown with checkboxes
-            ExposedDropdownMenuBox(
-                expanded = sheetsDropdownExpanded,
-                onExpandedChange = { sheetsDropdownExpanded = !sheetsDropdownExpanded },
-                modifier = Modifier.fillMaxWidth()
+            // c - abaixo exibirá as opcoes de nome do grupo com as mesmas opcoes que ja existe.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = sheetsSummaryText,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Abas Incluídas no Grupo") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sheetsDropdownExpanded) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-                    shape = RoundedCornerShape(10.dp)
-                )
-                ExposedDropdownMenu(
-                    expanded = sheetsDropdownExpanded,
-                    onDismissRequest = { sheetsDropdownExpanded = false }
+                ExposedDropdownMenuBox(
+                    expanded = nameTypeExpanded,
+                    onExpandedChange = { nameTypeExpanded = !nameTypeExpanded },
+                    modifier = Modifier.weight(1f)
                 ) {
-                    sheetNames.forEach { sheet ->
-                        val isChecked = group.selectedSheets.contains(sheet) || (group.selectedSheets.isEmpty() && sheet == currentGlobalSheet)
+                    OutlinedTextField(
+                        value = nameTypeLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Origem do Nome", fontSize = 11.sp) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = nameTypeExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                    )
+                    ExposedDropdownMenu(
+                        expanded = nameTypeExpanded,
+                        onDismissRequest = { nameTypeExpanded = false }
+                    ) {
                         DropdownMenuItem(
-                            text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Checkbox(
-                                        checked = isChecked,
-                                        onCheckedChange = null
-                                    )
-                                    Text(sheet)
-                                }
-                            },
+                            text = { Text("Texto") },
                             onClick = {
-                                val currentSelected = if (group.selectedSheets.isEmpty()) listOf(currentGlobalSheet) else group.selectedSheets
-                                val newSelected = if (isChecked) {
-                                    currentSelected.filter { it != sheet }
-                                } else {
-                                    currentSelected + sheet
-                                }
-                                onUpdateGroup(group.copy(selectedSheets = newSelected))
+                                nameTypeExpanded = false
+                                onUpdateGroup(group.copy(nameSourceType = "TEXT"))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Célula") },
+                            onClick = {
+                                nameTypeExpanded = false
+                                onUpdateGroup(group.copy(nameSourceType = "CELL"))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Aba") },
+                            onClick = {
+                                nameTypeExpanded = false
+                                onUpdateGroup(group.copy(nameSourceType = "SHEET"))
                             }
                         )
                     }
+                }
+
+                if (group.nameSourceType == "CELL") {
+                    OutlinedTextField(
+                        value = group.cellReference,
+                        onValueChange = { onUpdateGroup(group.copy(cellReference = it)) },
+                        label = { Text("Ref. Célula", fontSize = 11.sp) },
+                        placeholder = { Text("ex: B2") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                    )
+                } else if (group.nameSourceType == "TEXT") {
+                    OutlinedTextField(
+                        value = group.name,
+                        onValueChange = { onUpdateGroup(group.copy(name = it)) },
+                        label = { Text("Nome do Grupo", fontSize = 11.sp) },
+                        placeholder = { Text("ex: Resumo") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = effectiveSheet,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Aba Utilizada", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                    )
                 }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-            // Items within group
+            // d - Abaixo as configuracoes de itens, nelas quero poder adicionar varios itens no mesmo grupo, pois estes itens que irao compor os cards.
             Text(
-                text = "Itens do Grupo (Colunas e Linhas)",
+                text = "Itens do Grupo",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -997,7 +1098,6 @@ fun DisplayGroupCard(
                 )
             }
 
-            // Add Item button ("+")
             OutlinedButton(
                 onClick = {
                     val newItem = DisplayGroupItem(
@@ -1014,7 +1114,7 @@ fun DisplayGroupCard(
             ) {
                 Icon(Icons.Rounded.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Adicionar Colunas/Linhas neste Grupo")
+                Text("+ Adicionar Item ao Grupo")
             }
         }
     }
@@ -1056,7 +1156,8 @@ fun DisplayGroupItemCard(
                     placeholder = { Text("ex: Vendas Nacionais") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
                 )
                 if (canDelete) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -1130,7 +1231,8 @@ fun DisplayGroupItemCard(
                 currentMetric = item.metric,
                 onMetricSelected = { newMetric ->
                     onUpdateItem(item.copy(metric = newMetric))
-                }
+                },
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -1148,11 +1250,8 @@ fun RowDropdown(
     var expanded by remember { mutableStateOf(false) }
 
     val options = (0..minOf(998, maxRowIndex)).map { it }
-    val selectedText = if (selectedRow != null && selectedRow in 0..maxRowIndex) {
-        "Linha ${selectedRow + 1}"
-    } else {
-        "Padrão Global"
-    }
+    val selectedIndex = selectedRow ?: 0
+    val selectedText = "${selectedIndex + 1}"
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -1168,22 +1267,17 @@ fun RowDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-            shape = RoundedCornerShape(8.dp)
+            shape = RoundedCornerShape(8.dp),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
         )
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            DropdownMenuItem(
-                text = { Text("Padrão Global") },
-                onClick = {
-                    expanded = false
-                    onRowSelected(null)
-                }
-            )
             for (rowIdx in options) {
                 DropdownMenuItem(
-                    text = { Text("Linha ${rowIdx + 1}") },
+                    text = { Text("${rowIdx + 1}") },
                     onClick = {
                         expanded = false
                         onRowSelected(rowIdx)
@@ -1212,7 +1306,7 @@ fun ColumnDropdown(
         val custom = customColumnTitles[index]
         val header = headerRow.getOrNull(index)?.trim()
         val title = if (!custom.isNullOrBlank()) custom else if (!header.isNullOrBlank()) header else null
-        return if (title != null) "$excelName - $title" else "Coluna $excelName"
+        return if (title != null) "$excelName - $title" else excelName
     }
 
     val safeIndex = selectedColumn.coerceIn(0, maxOf(0, totalCols - 1))
@@ -1232,7 +1326,9 @@ fun ColumnDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-            shape = RoundedCornerShape(10.dp)
+            shape = RoundedCornerShape(10.dp),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -1274,7 +1370,9 @@ fun ColumnMetricDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-            shape = RoundedCornerShape(8.dp)
+            shape = RoundedCornerShape(8.dp),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -1288,6 +1386,186 @@ fun ColumnMetricDropdown(
                         onMetricSelected(metric)
                     }
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CardFieldConfigCard(
+    fieldIndex: Int,
+    cardConfig: com.example.analizer.model.CardConfig,
+    cardIdx: Int,
+    cards: List<com.example.analizer.model.CardConfig>,
+    displayGroups: List<DisplayGroup>,
+    linkedGroup: DisplayGroup?,
+    config: AnalysisConfig,
+    onConfigChanged: (AnalysisConfig) -> Unit
+) {
+    val defaultTitle = DEFAULT_CARD_DETAIL_TITLES.getOrElse(fieldIndex) { "Campo ${fieldIndex + 1}" }
+    val mapping = cardConfig.fieldMappings.find { it.fieldIndex == fieldIndex }
+    val titleRef = mapping?.titleItemReference?.ifBlank { defaultTitle } ?: defaultTitle
+    val valueRef = mapping?.valueItemReference ?: ""
+
+    val groupItems = linkedGroup?.items ?: emptyList()
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+        ),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Campo ${fieldIndex + 1} ($defaultTitle)",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            // Title selection / input
+            var titleExpanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = titleExpanded,
+                onExpandedChange = { titleExpanded = !titleExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = titleRef,
+                    onValueChange = { newTitle ->
+                        val updatedMappings = cardConfig.fieldMappings.toMutableList()
+                        val existingIdx = updatedMappings.indexOfFirst { it.fieldIndex == fieldIndex }
+                        if (existingIdx >= 0) {
+                            updatedMappings[existingIdx] = updatedMappings[existingIdx].copy(titleItemReference = newTitle)
+                        } else {
+                            updatedMappings.add(com.example.analizer.model.CardFieldMapping(fieldIndex = fieldIndex, titleItemReference = newTitle, valueItemReference = valueRef))
+                        }
+                        val updatedCards = cards.toMutableList()
+                        updatedCards[cardIdx] = cardConfig.copy(fieldMappings = updatedMappings)
+                        onConfigChanged(config.copy(cards = updatedCards))
+                    },
+                    label = { Text("Título") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = titleExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                )
+                ExposedDropdownMenu(
+                    expanded = titleExpanded,
+                    onDismissRequest = { titleExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Padrão: $defaultTitle") },
+                        onClick = {
+                            titleExpanded = false
+                            val updatedMappings = cardConfig.fieldMappings.toMutableList()
+                            val existingIdx = updatedMappings.indexOfFirst { it.fieldIndex == fieldIndex }
+                            if (existingIdx >= 0) {
+                                updatedMappings[existingIdx] = updatedMappings[existingIdx].copy(titleItemReference = defaultTitle)
+                            } else {
+                                updatedMappings.add(com.example.analizer.model.CardFieldMapping(fieldIndex = fieldIndex, titleItemReference = defaultTitle, valueItemReference = valueRef))
+                            }
+                            val updatedCards = cards.toMutableList()
+                            updatedCards[cardIdx] = cardConfig.copy(fieldMappings = updatedMappings)
+                            onConfigChanged(config.copy(cards = updatedCards))
+                        }
+                    )
+                    groupItems.forEachIndexed { itemIdx, item ->
+                        val itemLabel = item.customLabel.ifBlank { "Item ${itemIdx + 1}" }
+                        DropdownMenuItem(
+                            text = { Text(itemLabel) },
+                            onClick = {
+                                titleExpanded = false
+                                val updatedMappings = cardConfig.fieldMappings.toMutableList()
+                                val existingIdx = updatedMappings.indexOfFirst { it.fieldIndex == fieldIndex }
+                                if (existingIdx >= 0) {
+                                    updatedMappings[existingIdx] = updatedMappings[existingIdx].copy(titleItemReference = itemLabel)
+                                } else {
+                                    updatedMappings.add(com.example.analizer.model.CardFieldMapping(fieldIndex = fieldIndex, titleItemReference = itemLabel, valueItemReference = valueRef))
+                                }
+                                val updatedCards = cards.toMutableList()
+                                updatedCards[cardIdx] = cardConfig.copy(fieldMappings = updatedMappings)
+                                onConfigChanged(config.copy(cards = updatedCards))
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Value selection dropdown (Item from group)
+            var valueExpanded by remember { mutableStateOf(false) }
+            val selectedValueItemName = if (valueRef == "none") {
+                "Nenhum (--)"
+            } else {
+                groupItems.find { it.id == valueRef }?.let { it.customLabel.ifBlank { "Item" } } ?: if (valueRef.isBlank()) "Nenhum (--)" else "Item"
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = valueExpanded,
+                onExpandedChange = { valueExpanded = !valueExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = selectedValueItemName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Valor (Item do Grupo)") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = valueExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                )
+                ExposedDropdownMenu(
+                    expanded = valueExpanded,
+                    onDismissRequest = { valueExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Nenhum (--)") },
+                        onClick = {
+                            valueExpanded = false
+                            val updatedMappings = cardConfig.fieldMappings.toMutableList()
+                            val existingIdx = updatedMappings.indexOfFirst { it.fieldIndex == fieldIndex }
+                            if (existingIdx >= 0) {
+                                updatedMappings[existingIdx] = updatedMappings[existingIdx].copy(valueItemReference = "none")
+                            } else {
+                                updatedMappings.add(com.example.analizer.model.CardFieldMapping(fieldIndex = fieldIndex, titleItemReference = titleRef, valueItemReference = "none"))
+                            }
+                            val updatedCards = cards.toMutableList()
+                            updatedCards[cardIdx] = cardConfig.copy(fieldMappings = updatedMappings)
+                            onConfigChanged(config.copy(cards = updatedCards))
+                        }
+                    )
+                    groupItems.forEachIndexed { itemIdx, item ->
+                        val itemLabel = item.customLabel.ifBlank { "Item ${itemIdx + 1}" }
+                        DropdownMenuItem(
+                            text = { Text("$itemLabel (${item.metric})") },
+                            onClick = {
+                                valueExpanded = false
+                                val updatedMappings = cardConfig.fieldMappings.toMutableList()
+                                val existingIdx = updatedMappings.indexOfFirst { it.fieldIndex == fieldIndex }
+                                if (existingIdx >= 0) {
+                                    updatedMappings[existingIdx] = updatedMappings[existingIdx].copy(valueItemReference = item.id)
+                                } else {
+                                    updatedMappings.add(com.example.analizer.model.CardFieldMapping(fieldIndex = fieldIndex, titleItemReference = titleRef, valueItemReference = item.id))
+                                }
+                                val updatedCards = cards.toMutableList()
+                                updatedCards[cardIdx] = cardConfig.copy(fieldMappings = updatedMappings)
+                                onConfigChanged(config.copy(cards = updatedCards))
+                            }
+                        )
+                    }
+                }
             }
         }
     }

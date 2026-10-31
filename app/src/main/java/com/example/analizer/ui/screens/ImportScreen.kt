@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.analizer.Screen
 import com.example.analizer.model.SpreadsheetData
 
@@ -28,9 +29,13 @@ import com.example.analizer.model.SpreadsheetData
 fun ImportScreen(
     inputUrl: String,
     onUrlChange: (String) -> Unit,
+    targetSpreadsheetName: String = "",
+    onTargetSpreadsheetNameChange: (String) -> Unit = {},
     onFetchGoogleSheet: (String) -> Unit,
     onFileSelected: (Context, Uri) -> Unit,
     onLoadSampleData: (String) -> Unit,
+    onLoadSampleFolderData: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     isLoading: Boolean,
     errorMessage: String?,
     onErrorDismiss: () -> Unit,
@@ -49,42 +54,66 @@ fun ImportScreen(
         topBar = {
             TopAppBar(
                 title = { Text("AnaliZer - Importar Dados", fontWeight = FontWeight.Bold) },
+                actions = {
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = "Configurações e Conta Google"
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
+                    titleContentColor = androidx.compose.ui.graphics.Color.White,
+                    actionIconContentColor = androidx.compose.ui.graphics.Color(0xFFEBA036)
                 )
             )
         },
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525)
             ) {
+                val navItemColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
+                    selectedTextColor = androidx.compose.ui.graphics.Color(0xFFEBA036),
+                    indicatorColor = androidx.compose.ui.graphics.Color(0xFFEBA036),
+                    unselectedIconColor = androidx.compose.ui.graphics.Color(0xFF8A99B5),
+                    unselectedTextColor = androidx.compose.ui.graphics.Color(0xFF8A99B5)
+                )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Import,
                     onClick = { onScreenSelected(Screen.Import) },
                     icon = { Icon(Icons.Rounded.FileUpload, contentDescription = "Importar") },
-                    label = { Text("Importar") }
+                    label = { Text("Importar") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Data,
                     onClick = { onScreenSelected(Screen.Data) },
                     icon = { Icon(Icons.Rounded.TableChart, contentDescription = "Dados") },
-                    label = { Text("Dados") }
+                    label = { Text("Dados") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Config,
                     onClick = { onScreenSelected(Screen.Config) },
                     icon = { Icon(Icons.Rounded.Tune, contentDescription = "Configurar") },
-                    label = { Text("Configurar") }
+                    label = { Text("Configurar") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Analytics,
                     onClick = { onScreenSelected(Screen.Analytics) },
                     icon = { Icon(Icons.Rounded.Analytics, contentDescription = "Análise") },
-                    label = { Text("Análise") }
+                    label = { Text("Análise") },
+                    colors = navItemColors
                 )
             }
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = androidx.compose.ui.graphics.Color(0xFFF5E8C7)
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -177,30 +206,71 @@ fun ImportScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Link,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Importar do Google Sheets",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CloudDownload,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Importar do Google Sheets / Drive",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        FilledTonalButton(
+                            onClick = onOpenSettings,
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AccountCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Conta Google", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
+
+                    Text(
+                        text = "Cole o link de compartilhamento de uma planilha individual ou o link de uma pasta do Google Drive.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
                     OutlinedTextField(
                         value = inputUrl,
                         onValueChange = onUrlChange,
-                        label = { Text("Cole o link de compartilhamento ou URL do Google Sheets") },
+                        label = { Text("Link da Planilha ou Pasta do Google Drive") },
+                        placeholder = { Text("https://drive.google.com/drive/folders/... ou docs.google.com/spreadsheets/...") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         leadingIcon = {
-                            Icon(Icons.Rounded.CloudDownload, contentDescription = null)
+                            Icon(Icons.Rounded.Link, contentDescription = null)
+                        }
+                    )
+
+                    OutlinedTextField(
+                        value = targetSpreadsheetName,
+                        onValueChange = onTargetSpreadsheetNameChange,
+                        label = { Text("Nome da Planilha a procurar na pasta e subpastas") },
+                        placeholder = { Text("ex: Planilha_TXE3 (deixe em branco para todas)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        leadingIcon = {
+                            Icon(Icons.Rounded.Search, contentDescription = null)
                         }
                     )
 
@@ -220,7 +290,7 @@ fun ImportScreen(
                         }
                         Icon(Icons.Rounded.Download, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Carregar Planilha do Google")
+                        Text("Carregar Planilha ou Pasta")
                     }
                 }
             }
@@ -309,16 +379,16 @@ fun ImportScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
                             onClick = { onLoadSampleData("sales") },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Rounded.Store, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Dados de Vendas")
+                            Icon(Icons.Rounded.Store, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Vendas", fontSize = 12.sp)
                         }
 
                         OutlinedButton(
@@ -326,9 +396,23 @@ fun ImportScreen(
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.AutoMirrored.Rounded.TrendingUp, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Métricas de SaaS")
+                            Icon(Icons.AutoMirrored.Rounded.TrendingUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Métricas", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = { onLoadSampleFolderData() },
+                            modifier = Modifier.weight(1.2f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Rounded.FolderCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Multi-Pastas", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

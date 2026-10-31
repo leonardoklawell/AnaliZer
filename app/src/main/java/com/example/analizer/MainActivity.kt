@@ -52,19 +52,36 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainApp(viewModel: AnalyzerViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.initSession(context)
+    }
+
     val spreadsheetData by viewModel.spreadsheetData.collectAsStateWithLifecycle()
     val analysisConfig by viewModel.analysisConfig.collectAsStateWithLifecycle()
     val columnStats by viewModel.columnStats.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val inputUrl by viewModel.inputUrl.collectAsStateWithLifecycle()
+    val targetSpreadsheetName by viewModel.targetSpreadsheetName.collectAsStateWithLifecycle()
+    val userSession by viewModel.userSession.collectAsStateWithLifecycle()
 
+    var showSettingsDialog by remember { mutableStateOf(false) }
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Import) }
 
     LaunchedEffect(spreadsheetData) {
         if (spreadsheetData != null && currentScreen is Screen.Import) {
-            currentScreen = Screen.Analytics
+            currentScreen = Screen.Data
         }
+    }
+
+    if (showSettingsDialog) {
+        com.example.analizer.ui.screens.SettingsDialog(
+            userSession = userSession,
+            onLogin = { email, name -> viewModel.login(context, email, name) },
+            onLogout = { viewModel.logout(context) },
+            onDismiss = { showSettingsDialog = false }
+        )
     }
 
     when (currentScreen) {
@@ -72,9 +89,13 @@ fun MainApp(viewModel: AnalyzerViewModel) {
             ImportScreen(
                 inputUrl = inputUrl,
                 onUrlChange = { viewModel.setInputUrl(it) },
-                onFetchGoogleSheet = { viewModel.loadGoogleSheet(it) },
-                onFileSelected = { context, uri -> viewModel.loadUri(context, uri) },
+                targetSpreadsheetName = targetSpreadsheetName,
+                onTargetSpreadsheetNameChange = { viewModel.setTargetSpreadsheetName(it) },
+                onFetchGoogleSheet = { viewModel.loadGoogleSheet(it, targetSpreadsheetName) },
+                onFileSelected = { ctx, uri -> viewModel.loadUri(ctx, uri) },
                 onLoadSampleData = { type -> viewModel.loadSampleData(type) },
+                onLoadSampleFolderData = { viewModel.loadSampleFolderData() },
+                onOpenSettings = { showSettingsDialog = true },
                 isLoading = isLoading,
                 errorMessage = errorMessage,
                 onErrorDismiss = { viewModel.clearError() },
@@ -88,6 +109,7 @@ fun MainApp(viewModel: AnalyzerViewModel) {
                 spreadsheetData = spreadsheetData,
                 config = analysisConfig,
                 onConfigChanged = { viewModel.updateConfig(it) },
+                onOpenSettings = { showSettingsDialog = true },
                 currentScreen = currentScreen,
                 onScreenSelected = { currentScreen = it }
             )
@@ -96,8 +118,10 @@ fun MainApp(viewModel: AnalyzerViewModel) {
             ConfigScreen(
                 spreadsheetData = spreadsheetData,
                 config = analysisConfig,
+                columnStats = columnStats,
                 onConfigChanged = { viewModel.updateConfig(it) },
                 onRunAnalysis = { viewModel.runAnalysis() },
+                onOpenSettings = { showSettingsDialog = true },
                 currentScreen = currentScreen,
                 onScreenSelected = { currentScreen = it }
             )
@@ -107,6 +131,7 @@ fun MainApp(viewModel: AnalyzerViewModel) {
                 columnStats = columnStats,
                 spreadsheetData = spreadsheetData,
                 config = analysisConfig,
+                onOpenSettings = { showSettingsDialog = true },
                 currentScreen = currentScreen,
                 onScreenSelected = { currentScreen = it }
             )

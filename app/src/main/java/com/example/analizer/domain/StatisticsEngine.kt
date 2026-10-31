@@ -156,24 +156,43 @@ class StatisticsEngine {
         val result = mutableListOf<ColumnStats>()
 
         for ((groupIndex, group) in groups.withIndex()) {
-            val targetSheets = if (group.selectedSheets.isNotEmpty()) {
-                group.selectedSheets.filter { spreadsheetData.sheets.containsKey(it) }
+            val folderSheets = if (group.selectedFolder.isNotBlank()) {
+                spreadsheetData.getSheetsForFolder(group.selectedFolder)
             } else {
-                listOf(defaultSheetName)
+                spreadsheetData.sheets
+            }
+            val targetSheets = if (group.selectedSheets.isNotEmpty()) {
+                group.selectedSheets.filter { folderSheets.containsKey(it) || spreadsheetData.sheets.containsKey(it) }
+            } else {
+                listOf(folderSheets.keys.firstOrNull() ?: defaultSheetName)
             }.ifEmpty { listOf(defaultSheetName) }
 
             val firstSheet = targetSheets.firstOrNull() ?: defaultSheetName
-            val firstSheetRows = spreadsheetData.sheets[firstSheet] ?: emptyList()
-
-            val resolvedGroupName = if (group.nameSourceType == "CELL") {
-                val cellText = resolveCellText(firstSheetRows, group.cellReference)
-                if (!cellText.isNullOrBlank()) cellText else group.name.ifBlank { "Grupo ${groupIndex + 1}" }
+            val firstSheetRows = if (group.selectedFolder.isNotBlank()) {
+                spreadsheetData.getRows(group.selectedFolder, firstSheet)
             } else {
-                group.name.ifBlank { "Grupo ${groupIndex + 1}" }
+                spreadsheetData.sheets[firstSheet] ?: emptyList()
+            }
+
+            val resolvedGroupName = when (group.nameSourceType) {
+                "CELL" -> {
+                    val cellText = resolveCellText(firstSheetRows, group.cellReference)
+                    if (!cellText.isNullOrBlank()) cellText else group.name.ifBlank { "Grupo ${groupIndex + 1}" }
+                }
+                "SHEET", "SHEET_NAME", "ABANOME" -> {
+                    firstSheet
+                }
+                else -> {
+                    group.name.ifBlank { if (group.selectedFolder.isNotBlank()) group.selectedFolder else "Grupo ${groupIndex + 1}" }
+                }
             }
 
             for (sheetName in targetSheets) {
-                val sheet = spreadsheetData.sheets[sheetName] ?: emptyList()
+                val sheet = if (group.selectedFolder.isNotBlank()) {
+                    spreadsheetData.getRows(group.selectedFolder, sheetName)
+                } else {
+                    spreadsheetData.sheets[sheetName] ?: emptyList()
+                }
                 val totalCols = sheet.maxOfOrNull { it.size } ?: 0
                 val maxRowIdx = sheet.size - 1
                 if (totalCols == 0) continue

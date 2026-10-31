@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.analizer.data.SpreadsheetRepository
+import com.example.analizer.data.UserSession
+import com.example.analizer.data.UserSessionManager
 import com.example.analizer.domain.StatisticsEngine
 import com.example.analizer.model.AnalysisConfig
 import com.example.analizer.model.ColumnRangeInterval
@@ -26,6 +28,35 @@ class AnalyzerViewModel(
     private val _spreadsheetData = MutableStateFlow<SpreadsheetData?>(null)
     val spreadsheetData: StateFlow<SpreadsheetData?> = _spreadsheetData.asStateFlow()
 
+    private val _userSession = MutableStateFlow(
+        UserSession(
+            isLoggedIn = true,
+            userEmail = "leonardoaraujo34@gmail.com",
+            userName = "Leonardo Araújo",
+            projectId = "gen-lang-client-0130244093",
+            oauthClientId = "391811116027-69jcq39i03ptgirlbi4ekgf2nqj5gbqs.apps.googleusercontent.com",
+            isDriveAuthorized = true
+        )
+    )
+    val userSession: StateFlow<UserSession> = _userSession.asStateFlow()
+
+    fun initSession(context: Context) {
+        val sessionManager = UserSessionManager.getInstance(context)
+        _userSession.value = sessionManager.session.value
+    }
+
+    fun login(context: Context, email: String, name: String = "") {
+        val sessionManager = UserSessionManager.getInstance(context)
+        sessionManager.login(email, name)
+        _userSession.value = sessionManager.session.value
+    }
+
+    fun logout(context: Context) {
+        val sessionManager = UserSessionManager.getInstance(context)
+        sessionManager.logout()
+        _userSession.value = sessionManager.session.value
+    }
+
     private val _analysisConfig = MutableStateFlow(AnalysisConfig())
     val analysisConfig: StateFlow<AnalysisConfig> = _analysisConfig.asStateFlow()
 
@@ -38,24 +69,31 @@ class AnalyzerViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _inputUrl = MutableStateFlow("https://docs.google.com/spreadsheets/d/1iJutQlIzSyzJkOCXYNxnSP1FUTXLHd0TTCmxMtvvkeQ/edit?gid=209726842#gid=209726842")
+    private val _inputUrl = MutableStateFlow("")
     val inputUrl: StateFlow<String> = _inputUrl.asStateFlow()
+
+    private val _targetSpreadsheetName = MutableStateFlow("")
+    val targetSpreadsheetName: StateFlow<String> = _targetSpreadsheetName.asStateFlow()
 
     fun setInputUrl(url: String) {
         _inputUrl.value = url
     }
 
-    fun loadGoogleSheet(url: String) {
+    fun setTargetSpreadsheetName(name: String) {
+        _targetSpreadsheetName.value = name
+    }
+
+    fun loadGoogleSheet(url: String, targetSpreadsheetName: String = _targetSpreadsheetName.value) {
         val trimmedUrl = url.trim()
         if (trimmedUrl.isBlank()) {
-            _errorMessage.value = "Por favor, insira um link válido do Google Sheets."
+            _errorMessage.value = "Por favor, insira um link válido do Google Sheets ou Pasta do Google Drive."
             return
         }
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                val result = repository.fetchGoogleSheet(trimmedUrl)
+                val result = repository.fetchGoogleSheet(trimmedUrl, targetSpreadsheetName)
                 _isLoading.value = false
                 result.onSuccess { data ->
                     try {
@@ -78,7 +116,28 @@ class AnalyzerViewModel(
                             )
                         } else emptyList()
 
-                        val defaultDisplayGroups = if (colCount > 0) {
+                        val defaultDisplayGroups = if (data.folders.isNotEmpty()) {
+                            data.folders.mapIndexed { idx, folder ->
+                                val fSheet = folder.sheetNames.firstOrNull() ?: ""
+                                val fRows = folder.sheets[fSheet] ?: emptyList()
+                                val cCount = fRows.firstOrNull()?.size ?: 0
+                                DisplayGroup(
+                                    name = folder.folderName,
+                                    selectedFolder = folder.folderName,
+                                    selectedSheets = if (fSheet.isNotBlank()) listOf(fSheet) else emptyList(),
+                                    items = listOf(
+                                        DisplayGroupItem(
+                                            startColumn = 0,
+                                            endColumn = (cCount - 1).coerceAtLeast(0),
+                                            startRow = null,
+                                            endRow = null,
+                                            metric = "Média"
+                                        )
+                                    ),
+                                    displayOrder = idx
+                                )
+                            }
+                        } else if (colCount > 0) {
                             listOf(
                                 DisplayGroup(
                                     name = "Grupo 1",
@@ -116,6 +175,57 @@ class AnalyzerViewModel(
             } catch (t: Throwable) {
                 _isLoading.value = false
                 _errorMessage.value = "Erro na requisição: ${t.localizedMessage ?: t.message}"
+            }
+        }
+    }
+
+    fun loadSampleFolderData() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            try {
+                val sampleData = repository.createSampleMultiFolderData()
+                _spreadsheetData.value = sampleData
+                val firstFolder = sampleData.folders.firstOrNull()
+                val defaultSheet = firstFolder?.sheetNames?.firstOrNull() ?: sampleData.sheetNames.firstOrNull() ?: ""
+                val rows = firstFolder?.sheets?.get(defaultSheet) ?: sampleData.sheets[defaultSheet] ?: emptyList()
+                val colCount = rows.firstOrNull()?.size ?: 0
+
+                val defaultDisplayGroups = sampleData.folders.mapIndexed { idx, folder ->
+                    val fSheet = folder.sheetNames.firstOrNull() ?: ""
+                    val fRows = folder.sheets[fSheet] ?: emptyList()
+                    val cCount = fRows.firstOrNull()?.size ?: 0
+                    DisplayGroup(
+                        name = folder.folderName,
+                        selectedFolder = folder.folderName,
+                        selectedSheets = if (fSheet.isNotBlank()) listOf(fSheet) else emptyList(),
+                        items = listOf(
+                            DisplayGroupItem(
+                                startColumn = 0,
+                                endColumn = (cCount - 1).coerceAtLeast(0),
+                                startRow = 1,
+                                endRow = fRows.size - 1,
+                                metric = "Média"
+                            )
+                        ),
+                        displayOrder = idx
+                    )
+                }
+
+                val config = AnalysisConfig(
+                    sheetName = defaultSheet,
+                    headerRowIndex = 0,
+                    selectedColumnIndices = (0 until colCount).toList(),
+                    startRow = 1,
+                    endRow = if (rows.size > 1) rows.size - 1 else 0,
+                    displayGroups = defaultDisplayGroups
+                )
+                _analysisConfig.value = config
+                runAnalysisForData(sampleData, config)
+            } catch (e: Exception) {
+                _errorMessage.value = "Erro ao carregar exemplo de pastas: ${e.localizedMessage}"
+            } finally {
+                _isLoading.value = false
             }
         }
     }

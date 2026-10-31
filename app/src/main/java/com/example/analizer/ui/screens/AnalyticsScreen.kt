@@ -1,25 +1,31 @@
 package com.example.analizer.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.analizer.Screen
 import com.example.analizer.model.AnalysisConfig
 import com.example.analizer.model.ColumnStats
@@ -33,6 +39,7 @@ fun AnalyticsScreen(
     columnStats: List<ColumnStats>,
     spreadsheetData: SpreadsheetData?,
     config: AnalysisConfig = AnalysisConfig(),
+    onOpenSettings: () -> Unit = {},
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
@@ -51,46 +58,66 @@ fun AnalyticsScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier
+                    ) {
+                        Icon(Icons.Rounded.Settings, contentDescription = "Configurações e Conta Google")
+                    }
                     IconButton(onClick = { onScreenSelected(Screen.Import) }) {
                         Icon(Icons.Rounded.FileUpload, contentDescription = "Importar Planilha")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = Color(0xFF0D1525),
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color(0xFFEBA036)
                 )
             )
         },
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                containerColor = Color(0xFF0D1525)
             ) {
+                val navItemColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF0D1525),
+                    selectedTextColor = Color(0xFFEBA036),
+                    indicatorColor = Color(0xFFEBA036),
+                    unselectedIconColor = Color(0xFF8A99B5),
+                    unselectedTextColor = Color(0xFF8A99B5)
+                )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Import,
                     onClick = { onScreenSelected(Screen.Import) },
                     icon = { Icon(Icons.Rounded.FileUpload, contentDescription = "Importar") },
-                    label = { Text("Importar") }
+                    label = { Text("Importar") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Data,
                     onClick = { onScreenSelected(Screen.Data) },
                     icon = { Icon(Icons.Rounded.TableChart, contentDescription = "Dados") },
-                    label = { Text("Dados") }
+                    label = { Text("Dados") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Config,
                     onClick = { onScreenSelected(Screen.Config) },
                     icon = { Icon(Icons.Rounded.Tune, contentDescription = "Configurar") },
-                    label = { Text("Configurar") }
+                    label = { Text("Configurar") },
+                    colors = navItemColors
                 )
                 NavigationBarItem(
                     selected = currentScreen is Screen.Analytics,
                     onClick = { onScreenSelected(Screen.Analytics) },
                     icon = { Icon(Icons.Rounded.Analytics, contentDescription = "Análise") },
-                    label = { Text("Análise") }
+                    label = { Text("Análise") },
+                    colors = navItemColors
                 )
             }
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color(0xFFF5E8C7)
     ) { innerPadding ->
         if (spreadsheetData == null) {
             Box(
@@ -131,7 +158,16 @@ fun AnalyticsScreen(
                 ScrollableTabRow(
                     selectedTabIndex = selectedTab,
                     edgePadding = 0.dp,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    containerColor = Color(0xFFF5E8C7),
+                    contentColor = Color(0xFF0D1525),
+                    indicator = { tabPositions ->
+                        if (selectedTab < tabPositions.size) {
+                            TabRowDefaults.SecondaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                color = Color(0xFFEBA036)
+                            )
+                        }
+                    },
                     divider = {}
                 ) {
                     tabs.forEachIndexed { index, title ->
@@ -141,12 +177,16 @@ fun AnalyticsScreen(
                                 selectedTab = index
                                 activeTooltipIndex = null
                             },
-                            text = { Text(title, fontWeight = FontWeight.SemiBold) }
+                            text = { Text(title, fontWeight = FontWeight.SemiBold) },
+                            selectedContentColor = Color(0xFF0D1525),
+                            unselectedContentColor = Color(0xFF788497)
                         )
                     }
                 }
 
-                if (columnStats.isEmpty()) {
+                if (selectedTab == 0) {
+                    StatisticsTab(columnStats = columnStats, config = config, spreadsheetData = spreadsheetData)
+                } else if (columnStats.isEmpty()) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp)
@@ -186,7 +226,6 @@ fun AnalyticsScreen(
                     }
                 } else {
                     when (selectedTab) {
-                        0 -> StatisticsTab(columnStats = columnStats, config = config)
                         1 -> BarChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
                         2 -> LineChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
                         3 -> DistributionTab(columnStats)
@@ -200,132 +239,201 @@ fun AnalyticsScreen(
     }
 }
 
-fun getFieldValueForCardField(fieldIndex: Int, stat: ColumnStats, allStats: List<ColumnStats>, config: AnalysisConfig): Pair<String, String> {
-    val defaultTitles = listOf("Média", "Mediana", "Desv. Padrão", "Mín / Máx", "Soma", "Contagem")
-    val isCellVal = stat.metric == "Valor da Célula"
-    val defaultValues = listOf(
-        if (!isCellVal && stat.count > 0) String.format(Locale.getDefault(), "%.2f", stat.mean) else "-",
-        if (!isCellVal && stat.count > 0) String.format(Locale.getDefault(), "%.2f", stat.median) else "-",
-        if (!isCellVal && stat.count > 1) String.format(Locale.getDefault(), "%.2f", stat.stdDev) else "-",
-        if (!isCellVal && stat.count > 0) "${String.format(Locale.getDefault(), "%.1f", stat.min)} / ${String.format(Locale.getDefault(), "%.1f", stat.max)}" else "-",
-        if (!isCellVal && stat.count > 0) String.format(Locale.getDefault(), "%.1f", stat.sum) else "-",
-        if (stat.count > 0) "${stat.count}" else "-"
-    )
+val DEFAULT_CARD_DETAIL_TITLES = listOf("Média", "Mediana", "Desv. Padrão", "Mín / Máx", "Soma", "Contagem")
 
-    val mapping = config.cardFieldMappings.find { it.fieldIndex == fieldIndex }
-    if (mapping != null) {
-        val title = mapping.customTitle.ifBlank { defaultTitles[fieldIndex] }
-        val targetStat = if (mapping.groupId.isNotBlank()) {
-            allStats.find { it.groupName == mapping.groupId || it.columnIndex.toString() == mapping.groupId } ?: stat
-        } else {
-            stat
-        }
-        val value = when (mapping.metric) {
-            "Média" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.2f", targetStat.mean) else "-"
-            "Mediana" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.2f", targetStat.median) else "-"
-            "Desvio Padrão" -> if (targetStat.count > 1) String.format(Locale.getDefault(), "%.2f", targetStat.stdDev) else "-"
-            "Mínimo" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.1f", targetStat.min) else "-"
-            "Máximo" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.1f", targetStat.max) else "-"
-            "Soma", "Soma Acumulada" -> if (targetStat.count > 0) String.format(Locale.getDefault(), "%.2f", targetStat.sum) else "-"
-            "Contagem" -> if (targetStat.count > 0) "${targetStat.count}" else "-"
-            "Valor da Célula" -> targetStat.rawStringValues.firstOrNull() ?: "-"
-            else -> defaultValues[fieldIndex]
-        }
-        return Pair(title, value)
+fun resolveGroupName(
+    group: com.example.analizer.model.DisplayGroup?,
+    spreadsheetData: SpreadsheetData?,
+    currentSheet: String = "",
+    defaultIndex: Int = 0
+): String {
+    if (group == null) return "Card ${defaultIndex + 1}"
+    val effectiveSheet = group.selectedSheets.firstOrNull() ?: currentSheet.ifBlank { spreadsheetData?.sheetNames?.firstOrNull() ?: "" }
+    val sheetRows = if (!group.selectedFolder.isNullOrBlank()) {
+        spreadsheetData?.getRows(group.selectedFolder, effectiveSheet) ?: (spreadsheetData?.sheets?.get(effectiveSheet) ?: emptyList())
+    } else {
+        spreadsheetData?.sheets?.get(effectiveSheet) ?: emptyList()
     }
-    return Pair(defaultTitles[fieldIndex], defaultValues[fieldIndex])
+    return when (group.nameSourceType) {
+        "CELL" -> {
+            val cellText = com.example.analizer.domain.StatisticsEngine().resolveCellText(sheetRows, group.cellReference)
+            if (!cellText.isNullOrBlank()) cellText else group.name.ifBlank { if (group.selectedFolder.isNotBlank()) group.selectedFolder else "Célula ${group.cellReference}" }
+        }
+        "SHEET", "SHEET_NAME", "ABANOME" -> effectiveSheet.ifBlank { group.name.ifBlank { if (group.selectedFolder.isNotBlank()) group.selectedFolder else "Card ${defaultIndex + 1}" } }
+        else -> group.name.ifBlank { if (group.selectedFolder.isNotBlank()) group.selectedFolder else "Card ${defaultIndex + 1}" }
+    }
+}
+
+fun getFieldValueForCardConfigField(
+    fieldIndex: Int,
+    card: com.example.analizer.model.CardConfig,
+    allStats: List<ColumnStats>,
+    displayGroups: List<com.example.analizer.model.DisplayGroup>,
+    cardTitle: String = ""
+): Pair<String, String> {
+    val defaultTitle = DEFAULT_CARD_DETAIL_TITLES.getOrElse(fieldIndex) { "Campo ${fieldIndex + 1}" }
+    val linkedGroup = displayGroups.find { it.id == card.groupId || it.name == card.groupId }
+    val mapping = card.fieldMappings.find { it.fieldIndex == fieldIndex }
+
+    val titleRef = mapping?.titleItemReference?.ifBlank { defaultTitle } ?: defaultTitle
+    val matchedTitleItem = linkedGroup?.items?.find { it.id == titleRef || it.customLabel == titleRef }
+    val title = matchedTitleItem?.let { it.customLabel.ifBlank { defaultTitle } } ?: titleRef.ifBlank { defaultTitle }
+
+    // If no group is linked or no stats are loaded from the spreadsheet, return "--"
+    if (linkedGroup == null || allStats.isEmpty()) {
+        return Pair(title, "--")
+    }
+
+    // Strictly filter stats belonging ONLY to this card's linked group
+    val groupStats = allStats.filter { stat ->
+        (cardTitle.isNotBlank() && stat.groupName == cardTitle) ||
+        stat.groupName == linkedGroup.name ||
+        stat.groupName == linkedGroup.id
+    }
+
+    if (groupStats.isEmpty()) {
+        return Pair(title, "--")
+    }
+
+    val valueItemRef = mapping?.valueItemReference.orEmpty().trim()
+    if (valueItemRef == "none") {
+        return Pair(title, "--")
+    }
+    val targetItem = if (valueItemRef.isNotBlank()) {
+        linkedGroup.items.find { it.id == valueItemRef || it.customLabel == valueItemRef }
+    } else {
+        // Only map to group item if explicitly configured at this index
+        linkedGroup.items.getOrNull(fieldIndex)
+    }
+
+    if (targetItem == null) {
+        return Pair(title, "--")
+    }
+
+    val targetStat = groupStats.find { stat ->
+        stat.columnIndex in targetItem.startColumn..targetItem.endColumn &&
+        (targetItem.customLabel.isBlank() || stat.columnName.contains(targetItem.customLabel))
+    } ?: groupStats.find { stat ->
+        stat.columnIndex in targetItem.startColumn..targetItem.endColumn
+    }
+
+    if (targetStat == null || targetStat.count <= 0) {
+        return Pair(title, "--")
+    }
+
+    val metricToUse = if (targetItem.metric.isNotBlank()) targetItem.metric else targetStat.metric
+    val value = when (metricToUse) {
+        "Soma" -> String.format(Locale.getDefault(), "%.1f", targetStat.sum)
+        "Mediana" -> String.format(Locale.getDefault(), "%.2f", targetStat.median)
+        "Mínimo" -> String.format(Locale.getDefault(), "%.1f", targetStat.min)
+        "Máximo" -> String.format(Locale.getDefault(), "%.1f", targetStat.max)
+        "Mín / Máx" -> "${String.format(Locale.getDefault(), "%.1f", targetStat.min)} / ${String.format(Locale.getDefault(), "%.1f", targetStat.max)}"
+        "Desvio Padrão" -> if (targetStat.count > 1) String.format(Locale.getDefault(), "%.2f", targetStat.stdDev) else "--"
+        "Contagem" -> "${targetStat.count}"
+        "Valor da Célula" -> targetStat.rawStringValues.firstOrNull()?.takeIf { it.isNotBlank() } ?: "--"
+        "Variância" -> String.format(Locale.getDefault(), "%.2f", targetStat.stdDev * targetStat.stdDev)
+        else -> String.format(Locale.getDefault(), "%.2f", targetStat.mean)
+    }
+    return Pair(title, value)
 }
 
 @Composable
-fun StatisticsTab(
+fun AnalysisStatCard(
+    cardConfig: com.example.analizer.model.CardConfig,
     columnStats: List<ColumnStats>,
-    config: AnalysisConfig
+    displayGroups: List<com.example.analizer.model.DisplayGroup>,
+    spreadsheetData: SpreadsheetData?,
+    currentSheetName: String = "",
+    cardIndex: Int = 0,
+    modifier: Modifier = Modifier
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Stats Cards per Column
-        columnStats.forEachIndexed { i, stat ->
-            val colIndex = stat.columnIndex.takeIf { it >= 0 } ?: config.selectedColumnIndices.getOrNull(i) ?: i
-            val selectedMetric = stat.metric.ifBlank { config.getMetricForColumn(colIndex) }
+    val linkedGroup = displayGroups.find { it.id == cardConfig.groupId || it.name == cardConfig.groupId }
+    val cardTitle = resolveGroupName(linkedGroup, spreadsheetData, currentSheetName, cardIndex)
 
-            val highlightValue = when (selectedMetric) {
-                "Soma", "Soma Acumulada" -> String.format(Locale.getDefault(), "%.2f", stat.sum)
-                "Máximo" -> String.format(Locale.getDefault(), "%.2f", stat.max)
-                "Mínimo" -> String.format(Locale.getDefault(), "%.2f", stat.min)
-                "Mediana" -> String.format(Locale.getDefault(), "%.2f", stat.median)
-                "Desvio Padrão" -> String.format(Locale.getDefault(), "%.2f", stat.stdDev)
-                "Variância" -> String.format(Locale.getDefault(), "%.2f", stat.stdDev * stat.stdDev)
-                "Taxa de Crescimento" -> String.format(Locale.getDefault(), "%.2f%%", if (stat.rawValues.size >= 2 && stat.rawValues.first() != 0.0) ((stat.rawValues.last() - stat.rawValues.first()) / stat.rawValues.first()) * 100.0 else 0.0)
-                "Contagem" -> "${stat.count}"
-                "Valor da Célula" -> stat.rawStringValues.firstOrNull() ?: "-"
-                else -> String.format(Locale.getDefault(), "%.2f", stat.mean) // "Média"
+    val targetStat = columnStats.find {
+        (cardTitle.isNotBlank() && it.groupName == cardTitle) ||
+        it.groupName == linkedGroup?.name ||
+        it.groupName == cardConfig.groupId
+    }
+    val highlightSum = if (targetStat != null && targetStat.count > 0) {
+        String.format(Locale.getDefault(), "%.2f", targetStat.sum)
+    } else {
+        "--"
+    }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF101726)),
+        border = BorderStroke(1.dp, Color(0xFF1E283E))
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+            // Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = cardTitle,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.5.sp),
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF222F49)
+                ) {
+                    Text(
+                        text = if (highlightSum == "--") "Soma: --" else "Soma: $highlightSum",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFEBA036)
+                    )
+                }
             }
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(color = Color(0xFF1E283E), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(14.dp))
+
+            val visibleFieldIndices = mutableListOf(0, 1, 2, 3, 4, 5)
+            for (idx in 6 until 14) {
+                val m = cardConfig.fieldMappings.find { it.fieldIndex == idx }
+                if (m != null && m.valueItemReference.isNotBlank()) {
+                    visibleFieldIndices.add(idx)
+                }
+            }
+
+            val chunked = visibleFieldIndices.chunked(3)
+            chunked.forEachIndexed { rowIndex, rowChunk ->
+                if (rowIndex > 0) {
+                    Spacer(modifier = Modifier.height(18.dp))
+                }
+                val f1 = getFieldValueForCardConfigField(rowChunk[0], cardConfig, columnStats, displayGroups, cardTitle)
+                val f2 = if (rowChunk.size > 1) getFieldValueForCardConfigField(rowChunk[1], cardConfig, columnStats, displayGroups, cardTitle) else null
+                val f3 = if (rowChunk.size > 2) getFieldValueForCardConfigField(rowChunk[2], cardConfig, columnStats, displayGroups, cardTitle) else null
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
-                            // Removed "Aba: ...", showing ONLY the configured group name in blue
-                            Text(
-                                text = stat.groupName.ifBlank { stat.columnName },
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Text(
-                                text = "$selectedMetric: $highlightValue",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                    // Detailed metrics grid linked to cardFieldMappings
-                    val f0 = getFieldValueForCardField(0, stat, columnStats, config)
-                    val f1 = getFieldValueForCardField(1, stat, columnStats, config)
-                    val f2 = getFieldValueForCardField(2, stat, columnStats, config)
-                    val f3 = getFieldValueForCardField(3, stat, columnStats, config)
-                    val f4 = getFieldValueForCardField(4, stat, columnStats, config)
-                    val f5 = getFieldValueForCardField(5, stat, columnStats, config)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        StatDetailItem(f0.first, f0.second)
+                    Column(modifier = Modifier.weight(1f)) {
                         StatDetailItem(f1.first, f1.second)
-                        StatDetailItem(f2.first, f2.second)
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        StatDetailItem(f3.first, f3.second)
-                        StatDetailItem(f4.first, f4.second)
-                        StatDetailItem(f5.first, f5.second)
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (f2 != null) {
+                            StatDetailItem(f2.first, f2.second)
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (f3 != null) {
+                            StatDetailItem(f3.first, f3.second)
+                        }
                     }
                 }
             }
@@ -334,17 +442,136 @@ fun StatisticsTab(
 }
 
 @Composable
+fun MetricSummaryCard(
+    label: String,
+    value: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E8C7)),
+        border = BorderStroke(1.dp, Color(0xFFEDE6DA))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                color = Color(0xFF788497),
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A),
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .width(32.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(accentColor)
+            )
+        }
+    }
+}
+
+@Composable
+fun StatisticsTab(
+    columnStats: List<ColumnStats>,
+    config: AnalysisConfig,
+    spreadsheetData: SpreadsheetData? = null
+) {
+    val cards = config.effectiveCards
+    val displayGroups = if (config.displayGroups.isNotEmpty()) config.displayGroups else config.effectiveDisplayGroups
+    val totalRows = spreadsheetData?.sheets?.values?.maxOfOrNull { it.size } ?: 0
+    val totalCols = columnStats.size
+    val activeGroups = displayGroups.size
+    val totalCards = cards.size
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 4 Metric Strip (Matching Fintech Management Dashboard Print)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            MetricSummaryCard(
+                label = "Linhas",
+                value = if (totalRows > 0) "$totalRows" else "--",
+                accentColor = Color(0xFFEBA036),
+                modifier = Modifier.weight(1f)
+            )
+            MetricSummaryCard(
+                label = "Colunas",
+                value = if (totalCols > 0) "$totalCols" else "--",
+                accentColor = Color(0xFFE07A5F),
+                modifier = Modifier.weight(1f)
+            )
+            MetricSummaryCard(
+                label = "Grupos",
+                value = if (activeGroups > 0) "$activeGroups" else "--",
+                accentColor = Color(0xFF0D1525),
+                modifier = Modifier.weight(1f)
+            )
+            MetricSummaryCard(
+                label = "Cards",
+                value = if (totalCards > 0) "$totalCards" else "--",
+                accentColor = Color(0xFFD4A373),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        if (cards.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF101726)),
+                border = BorderStroke(1.dp, Color(0xFF1E283E))
+            ) {
+                Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text("Nenhum card configurado.", color = Color(0xFF94A3B8))
+                }
+            }
+        } else {
+            cards.forEachIndexed { cardIdx, cardConfig ->
+                AnalysisStatCard(
+                    cardConfig = cardConfig,
+                    columnStats = columnStats,
+                    displayGroups = displayGroups,
+                    spreadsheetData = spreadsheetData,
+                    currentSheetName = config.sheetName,
+                    cardIndex = cardIdx
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun StatDetailItem(label: String, value: String) {
+    val displayValue = if (value.isBlank() || value == "-") "--" else value
     Column {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+            color = Color(0xFF94A3B8)
         )
+        Spacer(modifier = Modifier.height(3.dp))
         Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold
+            text = displayValue,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White
         )
     }
 }
@@ -364,7 +591,9 @@ fun BarChartTab(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E8C7)),
+        border = BorderStroke(1.dp, Color(0xFFEDE6DA))
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -373,13 +602,15 @@ fun BarChartTab(
             Text(
                 text = "Gráfico de Barras (Médias por Coluna)",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A)
             )
 
             if (activeStats.isEmpty()) {
-                Text("Sem dados para exibir para os grupos selecionados.")
+                Text("Sem dados para exibir para os grupos selecionados.", color = Color(0xFF788497))
             } else {
-                val primaryColor = MaterialTheme.colorScheme.primary
+                val barColor = Color(0xFFE8A25D)
+                val activeBarColor = Color(0xFF0D1525)
 
                 Box(
                     modifier = Modifier
@@ -413,7 +644,7 @@ fun BarChartTab(
 
                             if (barWidth > 0f && barHeight > 0f) {
                                 drawRect(
-                                    color = if (activeTooltipIndex == index) primaryColor else primaryColor.copy(alpha = 0.8f),
+                                    color = if (activeTooltipIndex == index) activeBarColor else barColor,
                                     topLeft = Offset(left, top),
                                     size = Size(barWidth, barHeight)
                                 )
@@ -425,21 +656,22 @@ fun BarChartTab(
                 if (activeTooltipIndex != null && activeTooltipIndex in activeStats.indices) {
                     val stat = activeStats[activeTooltipIndex]
                     Surface(
-                        color = MaterialTheme.colorScheme.inverseSurface,
-                        shape = RoundedCornerShape(8.dp)
+                        color = Color(0xFF0D1525),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
                         Text(
                             text = "${stat.columnName}: Média = ${String.format(Locale.getDefault(), "%.2f", stat.mean)}",
-                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            color = Color(0xFFEBA036),
                             modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 } else {
                     Text(
                         text = "Toque em uma barra para ver detalhes.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFF788497)
                     )
                 }
             }
@@ -462,7 +694,9 @@ fun LineChartTab(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E8C7)),
+        border = BorderStroke(1.dp, Color(0xFFEDE6DA))
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -471,13 +705,15 @@ fun LineChartTab(
             Text(
                 text = "Gráfico de Linhas (Tendência de Médias)",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A)
             )
 
             if (activeStats.size < 2) {
-                Text("São necessárias pelo menos 2 colunas para exibir o gráfico de linhas.")
+                Text("São necessárias pelo menos 2 colunas para exibir o gráfico de linhas.", color = Color(0xFF788497))
             } else {
-                val primaryColor = MaterialTheme.colorScheme.primary
+                val lineColor = Color(0xFF0D1525)
+                val dotColor = Color(0xFFE07A5F)
 
                 Box(
                     modifier = Modifier
@@ -509,16 +745,16 @@ fun LineChartTab(
                             if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
 
                             drawCircle(
-                                color = primaryColor,
-                                radius = if (activeTooltipIndex == index) 8f else 5f,
+                                color = if (activeTooltipIndex == index) Color(0xFFEBA036) else dotColor,
+                                radius = if (activeTooltipIndex == index) 9f else 6f,
                                 center = Offset(x, y)
                             )
                         }
 
                         drawPath(
                             path = path,
-                            color = primaryColor,
-                            style = Stroke(width = 3.dp.toPx())
+                            color = lineColor,
+                            style = Stroke(width = 3.5.dp.toPx())
                         )
                     }
                 }
@@ -526,21 +762,22 @@ fun LineChartTab(
                 if (activeTooltipIndex != null && activeTooltipIndex in activeStats.indices) {
                     val stat = activeStats[activeTooltipIndex]
                     Surface(
-                        color = MaterialTheme.colorScheme.inverseSurface,
-                        shape = RoundedCornerShape(8.dp)
+                        color = Color(0xFF0D1525),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
                         Text(
                             text = "${stat.columnName}: Média = ${String.format(Locale.getDefault(), "%.2f", stat.mean)}",
-                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            color = Color(0xFFEBA036),
                             modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 } else {
                     Text(
                         text = "Toque em um ponto da linha para ver detalhes.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFF788497)
                     )
                 }
             }
@@ -550,9 +787,18 @@ fun LineChartTab(
 
 @Composable
 fun DistributionTab(columnStats: List<ColumnStats>) {
+    val progressColors = listOf(
+        Color(0xFF0D1525), // Navy
+        Color(0xFFEBA036), // Amber
+        Color(0xFFE07A5F), // Terracotta
+        Color(0xFF6B8F71)  // Sage
+    )
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E8C7)),
+        border = BorderStroke(1.dp, Color(0xFFEDE6DA))
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -561,13 +807,15 @@ fun DistributionTab(columnStats: List<ColumnStats>) {
             Text(
                 text = "Distribuição e Dispersão",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A)
             )
 
-            columnStats.forEach { stat ->
+            columnStats.forEachIndexed { idx, stat ->
                 val range = (stat.max - stat.min).takeIf { it > 0.0 && !it.isNaN() } ?: 1.0
                 val rawProgress = if (stat.stdDev.isNaN() || range.isNaN() || range <= 0.0) 0f else (stat.stdDev / range).toFloat()
                 val progress = rawProgress.takeIf { !it.isNaN() && !it.isInfinite() }?.coerceIn(0f, 1f) ?: 0f
+                val color = progressColors[idx % progressColors.size]
 
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -577,15 +825,18 @@ fun DistributionTab(columnStats: List<ColumnStats>) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(stat.columnName, fontWeight = FontWeight.SemiBold)
+                        Text(stat.columnName, fontWeight = FontWeight.SemiBold, color = Color(0xFF0F172A))
                         val safeStd = if (stat.stdDev.isNaN() || stat.stdDev.isInfinite()) 0.0 else stat.stdDev
-                        Text("Desv. Padrão: ${String.format(Locale.getDefault(), "%.2f", safeStd)}")
+                        Text("Desv. Padrão: ${String.format(Locale.getDefault(), "%.2f", safeStd)}", color = Color(0xFF788497))
                     }
                     LinearProgressIndicator(
                         progress = { progress },
-                        modifier = Modifier.fillMaxWidth().height(8.dp),
-                        color = MaterialTheme.colorScheme.secondary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = color,
+                        trackColor = Color(0xFFF1ECE1)
                     )
                 }
             }
@@ -597,7 +848,9 @@ fun DistributionTab(columnStats: List<ColumnStats>) {
 fun RawValuesTab(columnStats: List<ColumnStats>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E8C7)),
+        border = BorderStroke(1.dp, Color(0xFFEDE6DA))
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -606,30 +859,32 @@ fun RawValuesTab(columnStats: List<ColumnStats>) {
             Text(
                 text = "Valores Analisados Brutos",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A)
             )
 
             columnStats.forEach { stat ->
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        containerColor = Color(0xFFF7F4EB)
                     ),
+                    border = BorderStroke(1.dp, Color(0xFFEDE6DA)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                             text = stat.columnName,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = Color(0xFF0D1525)
                         )
                         Text(
                             text = "Valores (${stat.rawValues.size}): ${stat.rawValues.take(15).joinToString(", ")}${if (stat.rawValues.size > 15) "..." else ""}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color(0xFF788497)
                         )
                     }
                 }
