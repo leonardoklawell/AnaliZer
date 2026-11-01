@@ -280,7 +280,10 @@ fun ConfigScreen(
                             // Display Groups Container Card
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp)
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF0B1825)
+                                )
                             ) {
                                 Column(
                                     modifier = Modifier.padding(16.dp),
@@ -289,18 +292,19 @@ fun ConfigScreen(
                                     Text(
                                         text = "Grupos de Exibição",
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFEBA036)
                                     )
                                     Text(
                                         text = "Cada grupo contém a pasta, aba da planilha, nome do grupo e seus itens que compõem os cards.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = Color(0xFFD0DCE5)
                                     )
 
                                     if (displayGroups.isEmpty()) {
                                         Card(
                                             colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                                containerColor = Color(0xFF02121C)
                                             ),
                                             shape = RoundedCornerShape(12.dp),
                                             modifier = Modifier.fillMaxWidth()
@@ -314,7 +318,7 @@ fun ConfigScreen(
                                                 Text(
                                                     text = "Nenhum grupo configurado.",
                                                     style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    color = Color(0xFFD0DCE5)
                                                 )
                                             }
                                         }
@@ -348,7 +352,7 @@ fun ConfigScreen(
                                         }
                                     }
 
-                                    OutlinedButton(
+                                    Button(
                                         onClick = {
                                             val newGroup = DisplayGroup(
                                                 name = "Grupo ${displayGroups.size + 1}",
@@ -367,11 +371,15 @@ fun ConfigScreen(
                                             onConfigChanged(config.copy(displayGroups = displayGroups + newGroup))
                                         },
                                         modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(10.dp)
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF02121C),
+                                            contentColor = Color(0xFFEBA036)
+                                        )
                                     ) {
-                                        Icon(Icons.Rounded.Add, contentDescription = null)
+                                        Icon(Icons.Rounded.Add, contentDescription = null, tint = Color(0xFFEBA036))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Adicionar Grupo de Exibição")
+                                        Text("Adicionar Grupo de Exibição", color = Color(0xFFEBA036), fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -379,7 +387,10 @@ fun ConfigScreen(
                             // Group Ordering & Selection Card
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp)
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF0B1825)
+                                )
                             ) {
                                 Column(
                                     modifier = Modifier.padding(16.dp),
@@ -388,7 +399,8 @@ fun ConfigScreen(
                                     Text(
                                         text = "Posicionamento e Seleção para Análise",
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFEBA036)
                                     )
 
                                     displayGroups.forEachIndexed { index, group ->
@@ -399,7 +411,7 @@ fun ConfigScreen(
                                         }
                                         Card(
                                             colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                                                containerColor = Color(0xFF02121C)
                                             ),
                                             shape = RoundedCornerShape(10.dp),
                                             modifier = Modifier.fillMaxWidth()
@@ -423,12 +435,17 @@ fun ConfigScreen(
                                                                 if (idx == index) g.copy(enabledForAnalysis = checked) else g
                                                             }
                                                             onConfigChanged(config.copy(displayGroups = updated))
-                                                        }
+                                                        },
+                                                        colors = CheckboxDefaults.colors(
+                                                            checkedColor = Color(0xFFEBA036),
+                                                            uncheckedColor = Color(0xFF788497)
+                                                        )
                                                     )
                                                     Text(
                                                         text = "${index + 1}. $groupName",
                                                         style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Bold
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White
                                                     )
                                                 }
 
@@ -448,7 +465,11 @@ fun ConfigScreen(
                                                         },
                                                         enabled = index > 0
                                                     ) {
-                                                        Icon(Icons.Rounded.ArrowUpward, contentDescription = "Subir")
+                                                        Icon(
+                                                            Icons.Rounded.ArrowUpward,
+                                                            contentDescription = "Subir",
+                                                            tint = if (index > 0) Color.White else Color(0xFF556882)
+                                                        )
                                                     }
                                                     IconButton(
                                                         onClick = {
@@ -462,7 +483,11 @@ fun ConfigScreen(
                                                         },
                                                         enabled = index < displayGroups.size - 1
                                                     ) {
-                                                        Icon(Icons.Rounded.ArrowDownward, contentDescription = "Descer")
+                                                        Icon(
+                                                            Icons.Rounded.ArrowDownward,
+                                                            contentDescription = "Descer",
+                                                            tint = if (index < displayGroups.size - 1) Color.White else Color(0xFF556882)
+                                                        )
                                                     }
                                                 }
                                             }
@@ -474,7 +499,10 @@ fun ConfigScreen(
                             // Chart Group Comparison Card
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp)
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF0B1825)
+                                )
                             ) {
                                 Column(
                                     modifier = Modifier.padding(16.dp),
@@ -483,7 +511,8 @@ fun ConfigScreen(
                                     Text(
                                         text = "Seleção de Grupos para Gráficos",
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFEBA036)
                                     )
 
                                     displayGroups.forEachIndexed { index, group ->
@@ -518,9 +547,13 @@ fun ConfigScreen(
                                                         currentSelected.filter { it != groupName && it != group.id }
                                                     }
                                                     onConfigChanged(config.copy(chartSelectedGroupIds = newSelected))
-                                                }
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFFEBA036),
+                                                    uncheckedColor = Color(0xFF788497)
+                                                )
                                             )
-                                            Text(text = groupName, style = MaterialTheme.typography.bodyMedium)
+                                            Text(text = groupName, style = MaterialTheme.typography.bodyMedium, color = Color.White)
                                         }
                                     }
                                 }
@@ -535,13 +568,13 @@ fun ConfigScreen(
                                 modifier = Modifier.fillMaxWidth().height(52.dp),
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                    containerColor = Color(0xFF0B1825),
+                                    contentColor = Color(0xFFEBA036)
                                 )
                             ) {
-                                Icon(Icons.Rounded.Analytics, contentDescription = null)
+                                Icon(Icons.Rounded.Analytics, contentDescription = null, tint = Color(0xFFEBA036))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Executar Análise e Ver Resultados", fontWeight = FontWeight.Bold)
+                                Text("Executar Análise e Ver Resultados", fontWeight = FontWeight.Bold, color = Color(0xFFEBA036))
                             }
                         }
                     }
@@ -565,12 +598,13 @@ fun ConfigScreen(
                                     Text(
                                         text = "Configuração e Visualização de Cards",
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0B1825)
                                     )
                                     Text(
                                         text = "Crie, edite ou remova cards. Cada card tem 14 campos (2 por linha) vinculados aos itens do grupo selecionado.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = Color(0xFF475569)
                                     )
                                 }
                                 Button(
@@ -580,18 +614,22 @@ fun ConfigScreen(
                                         )
                                         onConfigChanged(config.copy(cards = cards + newCard))
                                     },
-                                    shape = RoundedCornerShape(10.dp)
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF0B1825),
+                                        contentColor = Color(0xFFEBA036)
+                                    )
                                 ) {
-                                    Icon(Icons.Rounded.Add, contentDescription = null)
+                                    Icon(Icons.Rounded.Add, contentDescription = null, tint = Color(0xFFEBA036))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Adicionar Card")
+                                    Text("Adicionar Card", color = Color(0xFFEBA036), fontWeight = FontWeight.Bold)
                                 }
                             }
 
                             if (cards.isEmpty()) {
                                 Card(
                                     colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        containerColor = Color(0xFF0B1825)
                                     ),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
@@ -605,7 +643,7 @@ fun ConfigScreen(
                                         Text(
                                             text = "Nenhum card configurado. Adicione um card acima.",
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = Color(0xFFD0DCE5)
                                         )
                                     }
                                 }
@@ -618,7 +656,7 @@ fun ConfigScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(16.dp),
                                         colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                            containerColor = Color(0xFF0B1825)
                                         )
                                     ) {
                                         Column(
@@ -635,14 +673,14 @@ fun ConfigScreen(
                                                     text = "Card ${cardIdx + 1}: $cardTitle",
                                                     style = MaterialTheme.typography.titleSmall,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary,
+                                                    color = Color(0xFFEBA036),
                                                     modifier = Modifier.weight(1f)
                                                 )
                                                 Row(
                                                     verticalAlignment = Alignment.CenterVertically,
                                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                 ) {
-                                                    FilledTonalButton(
+                                                    Button(
                                                         onClick = {
                                                             val duplicatedCard = cardConfig.copy(
                                                                 id = java.util.UUID.randomUUID().toString(),
@@ -656,6 +694,10 @@ fun ConfigScreen(
                                                         },
                                                         shape = RoundedCornerShape(8.dp),
                                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = Color(0xFF02121C),
+                                                            contentColor = Color(0xFFEBA036)
+                                                        ),
                                                         modifier = Modifier
                                                             .height(34.dp)
                                                             .testTag("duplicate_card_$cardIdx")
@@ -663,10 +705,11 @@ fun ConfigScreen(
                                                         Icon(
                                                             imageVector = Icons.Rounded.ContentCopy,
                                                             contentDescription = "Duplicar Card",
+                                                            tint = Color(0xFFEBA036),
                                                             modifier = Modifier.size(16.dp)
                                                         )
                                                         Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("Duplicar", fontSize = 12.sp)
+                                                        Text("Duplicar", fontSize = 12.sp, color = Color(0xFFEBA036), fontWeight = FontWeight.SemiBold)
                                                     }
                                                     IconButton(
                                                         onClick = {
@@ -678,13 +721,13 @@ fun ConfigScreen(
                                                         Icon(
                                                             imageVector = Icons.Rounded.Delete,
                                                             contentDescription = "Excluir Card",
-                                                            tint = MaterialTheme.colorScheme.error
+                                                            tint = Color(0xFFFF6B6B)
                                                         )
                                                     }
                                                 }
                                             }
 
-                                            // Live Card Preview Viewer (Matching image.png original appearance exactly)
+                                            // Live Card Preview Viewer
                                             AnalysisStatCard(
                                                 cardConfig = cardConfig,
                                                 columnStats = columnStats,
@@ -694,7 +737,7 @@ fun ConfigScreen(
                                                 cardIndex = cardIdx
                                             )
 
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                            HorizontalDivider(color = Color(0xFF2C3E55))
 
                                             // Card Group Selection (Card Title Source)
                                             var cardGroupExpanded by remember { mutableStateOf(false) }
@@ -711,19 +754,23 @@ fun ConfigScreen(
                                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = cardGroupExpanded) },
                                                     modifier = Modifier
                                                         .fillMaxWidth()
+                                                        
                                                         .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                                                     shape = RoundedCornerShape(8.dp),
                                                     singleLine = true,
-                                                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                                                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                                                    colors = darkTextFieldColors()
                                                 )
                                                 ExposedDropdownMenu(
                                                     expanded = cardGroupExpanded,
-                                                    onDismissRequest = { cardGroupExpanded = false }
+                                                    onDismissRequest = { cardGroupExpanded = false },
+                                                    modifier = Modifier.background(Color(0xFF02121C))
                                                 ) {
                                                     displayGroups.forEach { grp ->
                                                         val gName = resolveGroupName(grp, spreadsheetData, currentSheetName)
                                                         DropdownMenuItem(
-                                                            text = { Text(gName) },
+                                                            text = { Text(gName, color = Color.White) },
+                                                            colors = MenuDefaults.itemColors(textColor = Color.White),
                                                             onClick = {
                                                                 cardGroupExpanded = false
                                                                 val updatedCards = cards.toMutableList()
@@ -740,7 +787,7 @@ fun ConfigScreen(
                                                 text = "Editar 14 Campos do Card (2 por linha)",
                                                 style = MaterialTheme.typography.labelMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
+                                                color = Color(0xFFEBA036)
                                             )
 
                                             for (i in 0 until 14 step 2) {
@@ -788,6 +835,20 @@ fun ConfigScreen(
     }
 }
 
+@Composable
+private fun darkTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White,
+    focusedContainerColor = Color(0xFF02121C),
+    unfocusedContainerColor = Color(0xFF02121C),
+    focusedLabelColor = Color(0xFFEBA036),
+    unfocusedLabelColor = Color(0xFFB0BEC5),
+    focusedBorderColor = Color(0xFFEBA036),
+    unfocusedBorderColor = Color(0xFF4A5D78),
+    focusedTrailingIconColor = Color(0xFFEBA036),
+    unfocusedTrailingIconColor = Color.White
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DisplayGroupCard(
@@ -833,7 +894,7 @@ fun DisplayGroupCard(
 
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            containerColor = Color(0xFF02121C)
         ),
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth()
@@ -855,12 +916,13 @@ fun DisplayGroupCard(
                     Icon(
                         imageVector = Icons.Rounded.ViewWeek,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = Color(0xFFEBA036)
                     )
                     Text(
                         text = resolvedName,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
                 }
 
@@ -868,7 +930,7 @@ fun DisplayGroupCard(
                     Icon(
                         imageVector = Icons.Rounded.Delete,
                         contentDescription = "Remover Grupo",
-                        tint = MaterialTheme.colorScheme.error
+                        tint = Color(0xFFFF6B6B)
                     )
                 }
             }
@@ -888,26 +950,30 @@ fun DisplayGroupCard(
                         onExpandedChange = { folderExpanded = !folderExpanded }
                     ) {
                         OutlinedTextField(
-                            value = if (folderNames.isNotEmpty()) currentFolder else "Principal",
+                            value = if (folderNames.isNotEmpty()) currentFolder else "Pasta Principal",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Pasta Mãe", fontSize = 11.sp) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = folderExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                
                                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                             shape = RoundedCornerShape(10.dp),
                             singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                            colors = darkTextFieldColors()
                         )
                         ExposedDropdownMenu(
                             expanded = folderExpanded,
-                            onDismissRequest = { folderExpanded = false }
+                            onDismissRequest = { folderExpanded = false },
+                            modifier = Modifier.background(Color(0xFF02121C))
                         ) {
-                            val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Principal")
+                            val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Pasta Principal")
                             displayFolders.forEach { folder ->
                                 DropdownMenuItem(
-                                    text = { Text(folder) },
+                                    text = { Text(folder, color = Color.White) },
+                                    colors = MenuDefaults.itemColors(textColor = Color.White),
                                     onClick = {
                                         folderExpanded = false
                                         val fSheets = spreadsheetData?.getSheetNamesForFolder(folder) ?: sheetNames
@@ -934,26 +1000,30 @@ fun DisplayGroupCard(
                         onExpandedChange = { sheetExpanded = !sheetExpanded }
                     ) {
                         OutlinedTextField(
-                            value = effectiveSheet.ifBlank { "Padrão" },
+                            value = effectiveSheet.ifBlank { "Aba 1" },
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Aba da Planilha", fontSize = 11.sp) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sheetExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                
                                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                             shape = RoundedCornerShape(10.dp),
                             singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                            colors = darkTextFieldColors()
                         )
                         ExposedDropdownMenu(
                             expanded = sheetExpanded,
-                            onDismissRequest = { sheetExpanded = false }
+                            onDismissRequest = { sheetExpanded = false },
+                            modifier = Modifier.background(Color(0xFF02121C))
                         ) {
-                            val displaySheets = if (folderSheetNames.isNotEmpty()) folderSheetNames else listOf("Padrão")
+                            val displaySheets = if (folderSheetNames.isNotEmpty()) folderSheetNames else listOf("Aba 1")
                             displaySheets.forEach { sheet ->
                                 DropdownMenuItem(
-                                    text = { Text(sheet) },
+                                    text = { Text(sheet, color = Color.White) },
+                                    colors = MenuDefaults.itemColors(textColor = Color.White),
                                     onClick = {
                                         sheetExpanded = false
                                         onUpdateGroup(group.copy(selectedSheets = listOf(sheet)))
@@ -984,31 +1054,37 @@ fun DisplayGroupCard(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = nameTypeExpanded) },
                         modifier = Modifier
                             .fillMaxWidth()
+                            
                             .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                         shape = RoundedCornerShape(10.dp),
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                        colors = darkTextFieldColors()
                     )
                     ExposedDropdownMenu(
                         expanded = nameTypeExpanded,
-                        onDismissRequest = { nameTypeExpanded = false }
+                        onDismissRequest = { nameTypeExpanded = false },
+                        modifier = Modifier.background(Color(0xFF02121C))
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Texto") },
+                            text = { Text("Texto", color = Color.White) },
+                            colors = MenuDefaults.itemColors(textColor = Color.White),
                             onClick = {
                                 nameTypeExpanded = false
                                 onUpdateGroup(group.copy(nameSourceType = "TEXT"))
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Célula") },
+                            text = { Text("Célula", color = Color.White) },
+                            colors = MenuDefaults.itemColors(textColor = Color.White),
                             onClick = {
                                 nameTypeExpanded = false
                                 onUpdateGroup(group.copy(nameSourceType = "CELL"))
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Aba") },
+                            text = { Text("Aba", color = Color.White) },
+                            colors = MenuDefaults.itemColors(textColor = Color.White),
                             onClick = {
                                 nameTypeExpanded = false
                                 onUpdateGroup(group.copy(nameSourceType = "SHEET"))
@@ -1022,22 +1098,24 @@ fun DisplayGroupCard(
                         value = group.cellReference,
                         onValueChange = { onUpdateGroup(group.copy(cellReference = it)) },
                         label = { Text("Ref. Célula", fontSize = 11.sp) },
-                        placeholder = { Text("ex: B2") },
+                        placeholder = { Text("ex: B2", color = Color(0xFF788497)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                        colors = darkTextFieldColors()
                     )
                 } else if (group.nameSourceType == "TEXT") {
                     OutlinedTextField(
                         value = group.name,
                         onValueChange = { onUpdateGroup(group.copy(name = it)) },
                         label = { Text("Nome do Grupo", fontSize = 11.sp) },
-                        placeholder = { Text("ex: Resumo") },
+                        placeholder = { Text("ex: Resumo", color = Color(0xFF788497)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                        colors = darkTextFieldColors()
                     )
                 } else {
                     OutlinedTextField(
@@ -1048,19 +1126,20 @@ fun DisplayGroupCard(
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                        colors = darkTextFieldColors()
                     )
                 }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            HorizontalDivider(color = Color(0xFF2C3E55))
 
             // d - Abaixo as configuracoes de itens, nelas quero poder adicionar varios itens no mesmo grupo, pois estes itens que irao compor os cards.
             Text(
                 text = "Itens do Grupo",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = Color(0xFFEBA036)
             )
 
             group.items.forEachIndexed { itemIdx, item ->
@@ -1102,11 +1181,13 @@ fun DisplayGroupCard(
                     onUpdateGroup(group.copy(items = group.items + newItem))
                 },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(10.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBA036)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEBA036))
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = null)
+                Icon(Icons.Rounded.Add, contentDescription = null, tint = Color(0xFFEBA036))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("+ Adicionar Item ao Grupo")
+                Text("+ Adicionar Item ao Grupo", color = Color(0xFFEBA036))
             }
         }
     }
@@ -1127,7 +1208,7 @@ fun DisplayGroupItemCard(
 ) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+            containerColor = Color(0xFF02121C)
         ),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth()
@@ -1145,11 +1226,12 @@ fun DisplayGroupItemCard(
                     value = item.customLabel,
                     onValueChange = { onUpdateItem(item.copy(customLabel = it)) },
                     label = { Text("Rótulo do Item (Opcional)") },
-                    placeholder = { Text("ex: Vendas Nacionais") },
+                    placeholder = { Text("ex: Vendas Nacionais", color = Color(0xFF788497)) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp),
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, color = Color.White),
+                    colors = darkTextFieldColors()
                 )
                 if (canDelete) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -1157,7 +1239,7 @@ fun DisplayGroupItemCard(
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Remover Item",
-                            tint = MaterialTheme.colorScheme.error
+                            tint = Color(0xFFFF6B6B)
                         )
                     }
                 }
@@ -1258,18 +1340,22 @@ fun RowDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
+                
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
             shape = RoundedCornerShape(8.dp),
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, color = Color.White),
+            colors = darkTextFieldColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Color(0xFF02121C))
         ) {
             for (rowIdx in options) {
                 DropdownMenuItem(
-                    text = { Text("${rowIdx + 1}") },
+                    text = { Text("${rowIdx + 1}", color = Color.White) },
+                    colors = MenuDefaults.itemColors(textColor = Color.White),
                     onClick = {
                         expanded = false
                         onRowSelected(rowIdx)
@@ -1317,18 +1403,22 @@ fun ColumnDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
+                
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
             shape = RoundedCornerShape(10.dp),
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, color = Color.White),
+            colors = darkTextFieldColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Color(0xFF02121C))
         ) {
             for (colIdx in 0 until totalCols) {
                 DropdownMenuItem(
-                    text = { Text(getColumnLabel(colIdx)) },
+                    text = { Text(getColumnLabel(colIdx), color = Color.White) },
+                    colors = MenuDefaults.itemColors(textColor = Color.White),
                     onClick = {
                         expanded = false
                         onColumnSelected(colIdx)
@@ -1361,18 +1451,22 @@ fun ColumnMetricDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
+                
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
             shape = RoundedCornerShape(8.dp),
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, color = Color.White),
+            colors = darkTextFieldColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Color(0xFF02121C))
         ) {
             METRIC_OPTIONS.forEach { metric ->
                 DropdownMenuItem(
-                    text = { Text(metric) },
+                    text = { Text(metric, color = Color.White) },
+                    colors = MenuDefaults.itemColors(textColor = Color.White),
                     onClick = {
                         expanded = false
                         onMetricSelected(metric)
@@ -1404,7 +1498,7 @@ fun CardFieldConfigCard(
 
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+            containerColor = Color(0xFF02121C)
         ),
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier.fillMaxWidth()
@@ -1417,7 +1511,7 @@ fun CardFieldConfigCard(
                 text = "Campo ${fieldIndex + 1} ($defaultTitle)",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = Color(0xFFEBA036)
             )
 
             // Title selection / input
@@ -1445,17 +1539,21 @@ fun CardFieldConfigCard(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = titleExpanded) },
                     modifier = Modifier
                         .fillMaxWidth()
+                        
                         .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                     shape = RoundedCornerShape(8.dp),
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                    colors = darkTextFieldColors()
                 )
                 ExposedDropdownMenu(
                     expanded = titleExpanded,
-                    onDismissRequest = { titleExpanded = false }
+                    onDismissRequest = { titleExpanded = false },
+                    modifier = Modifier.background(Color(0xFF02121C))
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Padrão: $defaultTitle") },
+                        text = { Text("Padrão: $defaultTitle", color = Color.White) },
+                        colors = MenuDefaults.itemColors(textColor = Color.White),
                         onClick = {
                             titleExpanded = false
                             val updatedMappings = cardConfig.fieldMappings.toMutableList()
@@ -1473,7 +1571,8 @@ fun CardFieldConfigCard(
                     groupItems.forEachIndexed { itemIdx, item ->
                         val itemLabel = item.customLabel.ifBlank { "Item ${itemIdx + 1}" }
                         DropdownMenuItem(
-                            text = { Text(itemLabel) },
+                            text = { Text(itemLabel, color = Color.White) },
+                            colors = MenuDefaults.itemColors(textColor = Color.White),
                             onClick = {
                                 titleExpanded = false
                                 val updatedMappings = cardConfig.fieldMappings.toMutableList()
@@ -1513,17 +1612,21 @@ fun CardFieldConfigCard(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = valueExpanded) },
                     modifier = Modifier
                         .fillMaxWidth()
+                        
                         .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                     shape = RoundedCornerShape(8.dp),
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = Color.White),
+                    colors = darkTextFieldColors()
                 )
                 ExposedDropdownMenu(
                     expanded = valueExpanded,
-                    onDismissRequest = { valueExpanded = false }
+                    onDismissRequest = { valueExpanded = false },
+                    modifier = Modifier.background(Color(0xFF02121C))
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Nenhum (--)") },
+                        text = { Text("Nenhum (--)", color = Color.White) },
+                        colors = MenuDefaults.itemColors(textColor = Color.White),
                         onClick = {
                             valueExpanded = false
                             val updatedMappings = cardConfig.fieldMappings.toMutableList()
@@ -1541,7 +1644,8 @@ fun CardFieldConfigCard(
                     groupItems.forEachIndexed { itemIdx, item ->
                         val itemLabel = item.customLabel.ifBlank { "Item ${itemIdx + 1}" }
                         DropdownMenuItem(
-                            text = { Text("$itemLabel (${item.metric})") },
+                            text = { Text("$itemLabel (${item.metric})", color = Color.White) },
+                            colors = MenuDefaults.itemColors(textColor = Color.White),
                             onClick = {
                                 valueExpanded = false
                                 val updatedMappings = cardConfig.fieldMappings.toMutableList()

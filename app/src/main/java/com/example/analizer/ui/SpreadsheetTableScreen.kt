@@ -1,7 +1,9 @@
 package com.example.analizer.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -176,7 +178,10 @@ fun SpreadsheetTableScreen(
                 // Top bar card: Dropdowns for Pasta Mãe and Aba da Planilha
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF0B1825)
+                    )
                 ) {
                     Column(
                         modifier = Modifier
@@ -196,26 +201,40 @@ fun SpreadsheetTableScreen(
                                     onExpandedChange = { folderExpanded = !folderExpanded }
                                 ) {
                                     OutlinedTextField(
-                                        value = if (folderNames.isNotEmpty()) selectedFolder else "Principal",
+                                        value = if (folderNames.isNotEmpty()) selectedFolder else "Pasta Principal",
                                         onValueChange = {},
                                         readOnly = true,
                                         label = { Text("Pasta Mãe", fontSize = 11.sp) },
                                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = folderExpanded) },
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedContainerColor = Color(0xFF02121C),
+                                            unfocusedContainerColor = Color(0xFF02121C),
+                                            focusedBorderColor = Color(0xFF4A5D78),
+                                            unfocusedBorderColor = Color(0xFF4A5D78),
+                                            focusedLabelColor = Color(0xFFEBA036),
+                                            unfocusedLabelColor = Color(0xFFB0BEC5),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedTrailingIconColor = Color(0xFFEBA036),
+                                            unfocusedTrailingIconColor = Color.White
+                                        ),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                                         shape = RoundedCornerShape(10.dp),
                                         singleLine = true,
-                                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp)
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
                                     )
                                     ExposedDropdownMenu(
                                         expanded = folderExpanded,
-                                        onDismissRequest = { folderExpanded = false }
+                                        onDismissRequest = { folderExpanded = false },
+                                        modifier = Modifier.background(Color(0xFF02121C))
                                     ) {
-                                        val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Principal")
+                                        val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Pasta Principal")
                                         displayFolders.forEach { folder ->
                                             DropdownMenuItem(
-                                                text = { Text(folder) },
+                                                text = { Text(folder, color = Color.White) },
+                                                colors = MenuDefaults.itemColors(textColor = Color.White),
                                                 onClick = {
                                                     folderExpanded = false
                                                     selectedFolder = folder
@@ -247,11 +266,23 @@ fun SpreadsheetTableScreen(
                                     onExpandedChange = { sheetExpanded = !sheetExpanded }
                                 ) {
                                     OutlinedTextField(
-                                        value = selectedSheet.ifBlank { "Padrão" },
+                                        value = selectedSheet.ifBlank { "Aba 1" },
                                         onValueChange = {},
                                         readOnly = true,
                                         label = { Text("Aba da Planilha", fontSize = 11.sp) },
                                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sheetExpanded) },
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedContainerColor = Color(0xFF02121C),
+                                            unfocusedContainerColor = Color(0xFF02121C),
+                                            focusedBorderColor = Color(0xFF4A5D78),
+                                            unfocusedBorderColor = Color(0xFF4A5D78),
+                                            focusedLabelColor = Color(0xFFEBA036),
+                                            unfocusedLabelColor = Color(0xFFB0BEC5),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedTrailingIconColor = Color(0xFFEBA036),
+                                            unfocusedTrailingIconColor = Color.White
+                                        ),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
@@ -261,12 +292,14 @@ fun SpreadsheetTableScreen(
                                     )
                                     ExposedDropdownMenu(
                                         expanded = sheetExpanded,
-                                        onDismissRequest = { sheetExpanded = false }
+                                        onDismissRequest = { sheetExpanded = false },
+                                        modifier = Modifier.background(Color(0xFF02121C))
                                     ) {
-                                        val displaySheets = if (availableSheetNames.isNotEmpty()) availableSheetNames else listOf("Padrão")
+                                        val displaySheets = if (availableSheetNames.isNotEmpty()) availableSheetNames else listOf("Aba 1")
                                         displaySheets.forEach { sheet ->
                                             DropdownMenuItem(
-                                                text = { Text(sheet) },
+                                                text = { Text(sheet, color = Color.White) },
+                                                colors = MenuDefaults.itemColors(textColor = Color.White),
                                                 onClick = {
                                                     sheetExpanded = false
                                                     selectedSheet = sheet
@@ -304,12 +337,12 @@ fun SpreadsheetTableScreen(
                     Text(
                         text = if (rows.size > maxDisplayRows) "Linhas: ${rows.size} (exibindo primeiras $maxDisplayRows)" else "Total de linhas: ${rows.size}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFF333333)
                     )
                     Text(
                         text = "Total de colunas: ${rows.maxOfOrNull { it.size } ?: 0}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFF333333)
                     )
                 }
 
@@ -320,7 +353,7 @@ fun SpreadsheetTableScreen(
                         .weight(1f),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        containerColor = Color.White
                     )
                 ) {
                     val horizontalScrollState = rememberScrollState()
@@ -397,23 +430,35 @@ fun SpreadsheetTableScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedButton(
+                    Button(
                         onClick = { onScreenSelected(Screen.Config) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Configurar Intervalo")
+                        Text(
+                            text = "Configurar Intervalo",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     Button(
                         onClick = { onScreenSelected(Screen.Analytics) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Rounded.Analytics, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Ver Análise")
+                        Text(
+                            text = "Ver Análise",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }

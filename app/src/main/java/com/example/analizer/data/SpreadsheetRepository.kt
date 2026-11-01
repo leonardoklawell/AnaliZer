@@ -130,17 +130,63 @@ class SpreadsheetRepository(
             return@withContext searchGoogleDriveFolder(trimmed, targetSpreadsheetName)
         }
 
+        val spreadsheetId = extractFolderId(trimmed)
+        val fetchedTitle = if (spreadsheetId.isNotBlank()) fetchDriveTitleFromHtml(spreadsheetId) else null
+        val realTitle = fetchedTitle?.ifBlank { null } ?: extractTitleFromUrl(trimmed) ?: "Planilha Google"
+
         val xlsxUrl = transformGoogleSheetUrl(trimmed)
         val xlsxResult = fetchUrl(xlsxUrl)
         if (xlsxResult.isSuccess) {
-            return@withContext xlsxResult
+            val data = xlsxResult.getOrNull()
+            if (data != null && data.sheetNames.isNotEmpty()) {
+                val folderObj = com.example.analizer.model.FolderSpreadsheet(
+                    folderName = realTitle,
+                    spreadsheetName = realTitle,
+                    sheetNames = data.sheetNames,
+                    sheets = data.sheets
+                )
+                val allSheets = mutableMapOf<String, List<List<String>>>()
+                data.sheets.forEach { (sName, sRows) ->
+                    allSheets["[$realTitle] $sName"] = sRows
+                    if (!allSheets.containsKey(sName)) allSheets[sName] = sRows
+                }
+                return@withContext Result.success(
+                    SpreadsheetData(
+                        sheetNames = data.sheetNames,
+                        sheets = allSheets,
+                        folders = listOf(folderObj),
+                        currentFolderName = realTitle
+                    )
+                )
+            }
         }
 
         val csvUrl = transformGoogleSheetCsvUrl(trimmed)
         if (csvUrl != xlsxUrl) {
             val csvResult = fetchUrl(csvUrl)
             if (csvResult.isSuccess) {
-                return@withContext csvResult
+                val data = csvResult.getOrNull()
+                if (data != null && data.sheetNames.isNotEmpty()) {
+                    val folderObj = com.example.analizer.model.FolderSpreadsheet(
+                        folderName = realTitle,
+                        spreadsheetName = realTitle,
+                        sheetNames = data.sheetNames,
+                        sheets = data.sheets
+                    )
+                    val allSheets = mutableMapOf<String, List<List<String>>>()
+                    data.sheets.forEach { (sName, sRows) ->
+                        allSheets["[$realTitle] $sName"] = sRows
+                        if (!allSheets.containsKey(sName)) allSheets[sName] = sRows
+                    }
+                    return@withContext Result.success(
+                        SpreadsheetData(
+                            sheetNames = data.sheetNames,
+                            sheets = allSheets,
+                            folders = listOf(folderObj),
+                            currentFolderName = realTitle
+                        )
+                    )
+                }
             }
         }
 
@@ -206,11 +252,72 @@ class SpreadsheetRepository(
         }
     }
 
+    private fun extractTitleFromUrl(url: String): String? {
+        val trimmed = url.trim()
+        val sheetMatch = Regex("/spreadsheets/d/([a-zA-Z0-9-_]+)").find(trimmed)
+        if (sheetMatch != null) {
+            return fetchDriveTitleFromHtml(sheetMatch.groups[1]?.value.orEmpty())
+        }
+        return null
+    }
+
+    private fun fetchDriveTitleFromHtml(id: String): String? {
+        if (id.isBlank()) return null
+        val urlsToTry = listOf(
+            "https://drive.google.com/drive/folders/$id",
+            "https://drive.google.com/embeddedfolderview?id=$id",
+            "https://docs.google.com/spreadsheets/d/$id/htmlview",
+            "https://drive.google.com/file/d/$id/view"
+        )
+        for (urlStr in urlsToTry) {
+            try {
+                val request = Request.Builder()
+                    .url(urlStr)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+                    .build()
+                okHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val html = response.body?.string().orEmpty()
+                        val ogTitleMatch = Regex("""<meta\s+property="og:title"\s+content="([^"]+)"""", RegexOption.IGNORE_CASE).find(html)
+                        if (ogTitleMatch != null) {
+                            val title = ogTitleMatch.groups[1]?.value.orEmpty()
+                                .replace("- Google Drive", "")
+                                .replace("- Google Sheets", "")
+                                .replace(" - Google Drive", "")
+                                .replace(" - Google Sheets", "")
+                                .trim()
+                            if (title.isNotBlank() && title != "Google Drive" && title != "Google Sheets" && title != "Google Docs") {
+                                return title
+                            }
+                        }
+                        val titleMatch = Regex("""<title>(.*?)</title>""", RegexOption.IGNORE_CASE).find(html)
+                        if (titleMatch != null) {
+                            val title = titleMatch.groups[1]?.value.orEmpty()
+                                .replace("- Google Drive", "")
+                                .replace("- Google Sheets", "")
+                                .replace(" - Google Drive", "")
+                                .replace(" - Google Sheets", "")
+                                .trim()
+                            if (title.isNotBlank() && title != "Google Drive" && title != "Google Sheets" && title != "Google Docs") {
+                                return title
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // Continue next URL
+            }
+        }
+        return null
+    }
+
     suspend fun loadSpreadsheetFromUri(context: Context, uri: Uri): Result<SpreadsheetData> = withContext(Dispatchers.IO) {
         try {
             val contentResolver = context.contentResolver
             val mimeType = contentResolver.getType(uri)
             val fileName = getFileName(context, uri)
+            val cleanName = fileName.replace(Regex("\\.(xlsx|xls|csv)$", RegexOption.IGNORE_CASE), "").ifBlank { "Arquivo Local" }
 
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 val bytes = inputStream.readBytes()
@@ -220,31 +327,47 @@ class SpreadsheetRepository(
                               mimeType?.contains("excel") == true ||
                               mimeType?.contains("openxmlformats") == true
 
-                if (isExcel) {
+                val dataResult = if (isExcel) {
                     try {
-                        val data = parseExcel(ByteArrayInputStream(bytes))
-                        return@withContext Result.success(data)
+                        parseExcel(ByteArrayInputStream(bytes))
                     } catch (e: Throwable) {
                         try {
-                            val data = parseCsv(ByteArrayInputStream(bytes), "Sheet1")
-                            return@withContext Result.success(data)
+                            parseCsv(ByteArrayInputStream(bytes), "Sheet1")
                         } catch (_: Throwable) {
-                            return@withContext Result.failure(e)
+                            throw e
                         }
                     }
                 } else {
                     try {
-                        val data = parseCsv(ByteArrayInputStream(bytes), "Sheet1")
-                        return@withContext Result.success(data)
+                        parseCsv(ByteArrayInputStream(bytes), "Sheet1")
                     } catch (e: Throwable) {
                         try {
-                            val data = parseExcel(ByteArrayInputStream(bytes))
-                            return@withContext Result.success(data)
+                            parseExcel(ByteArrayInputStream(bytes))
                         } catch (_: Throwable) {
-                            return@withContext Result.failure(e)
+                            throw e
                         }
                     }
                 }
+
+                val folderObj = com.example.analizer.model.FolderSpreadsheet(
+                    folderName = cleanName,
+                    spreadsheetName = cleanName,
+                    sheetNames = dataResult.sheetNames,
+                    sheets = dataResult.sheets
+                )
+                val allSheets = mutableMapOf<String, List<List<String>>>()
+                dataResult.sheets.forEach { (sName, sRows) ->
+                    allSheets["[$cleanName] $sName"] = sRows
+                    if (!allSheets.containsKey(sName)) allSheets[sName] = sRows
+                }
+                return@withContext Result.success(
+                    SpreadsheetData(
+                        sheetNames = dataResult.sheetNames,
+                        sheets = allSheets,
+                        folders = listOf(folderObj),
+                        currentFolderName = cleanName
+                    )
+                )
             } ?: Result.failure(IOException("Could not open InputStream for Uri: $uri"))
         } catch (e: Throwable) {
             Result.failure(e)
@@ -336,7 +459,10 @@ class SpreadsheetRepository(
                 }
             }
 
-            val rootName = directItem?.name ?: getDriveItemName(folderId, apiKey) ?: "Pasta Principal"
+            val rootName = directItem?.name?.takeIf { it.isNotBlank() }
+                ?: getDriveItemName(folderId, apiKey)?.takeIf { it.isNotBlank() }
+                ?: fetchDriveTitleFromHtml(folderId)?.takeIf { it.isNotBlank() }
+                ?: "Pasta Drive"
             val queue = ArrayDeque<Pair<String, String>>()
             queue.add(Pair(folderId, rootName))
 
@@ -353,11 +479,39 @@ class SpreadsheetRepository(
                 val children = listDriveFolderChildren(currentFid, apiKey)
                 for (child in children) {
                     if (child.isFolder) {
-                        queue.add(Pair(child.id, child.name))
+                        val realFolderName = child.name.takeIf { it.isNotBlank() && it != "Subpasta" }
+                            ?: fetchDriveTitleFromHtml(child.id)?.takeIf { it.isNotBlank() }
+                            ?: "Subpasta"
+                        queue.add(Pair(child.id, realFolderName))
                     } else if (child.isSpreadsheet && processedFileIds.add(child.id)) {
                         allDiscoveredFiles.add(Pair(child, currentFname))
                     }
                 }
+            }
+
+            // Helper to format real folder display name
+            fun createFolderSpreadsheet(childItem: DriveItem, parentFolderName: String, parsedData: SpreadsheetData): com.example.analizer.model.FolderSpreadsheet {
+                val cleanSpreadsheetName = childItem.name
+                    .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                    .trim()
+                val folderDisplayName = if (parentFolderName.isNotBlank() && parentFolderName != rootName && parentFolderName != "Subpasta" && parentFolderName != "Pasta Principal") {
+                    if (cleanSpreadsheetName.isNotBlank() && cleanSpreadsheetName != "Planilha" && cleanSpreadsheetName != parentFolderName) {
+                        "$parentFolderName - $cleanSpreadsheetName"
+                    } else {
+                        parentFolderName
+                    }
+                } else if (cleanSpreadsheetName.isNotBlank() && cleanSpreadsheetName != "Planilha") {
+                    cleanSpreadsheetName
+                } else {
+                    rootName
+                }
+
+                return com.example.analizer.model.FolderSpreadsheet(
+                    folderName = folderDisplayName,
+                    spreadsheetName = cleanSpreadsheetName.ifBlank { folderDisplayName },
+                    sheetNames = parsedData.sheetNames,
+                    sheets = parsedData.sheets
+                )
             }
 
             // 2. Process matching spreadsheets first
@@ -368,14 +522,7 @@ class SpreadsheetRepository(
             for ((child, folderName) in targetMatches) {
                 val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
                 if (parsed != null && parsed.sheetNames.isNotEmpty()) {
-                    foundSpreadsheets.add(
-                        com.example.analizer.model.FolderSpreadsheet(
-                            folderName = folderName,
-                            spreadsheetName = child.name,
-                            sheetNames = parsed.sheetNames,
-                            sheets = parsed.sheets
-                        )
-                    )
+                    foundSpreadsheets.add(createFolderSpreadsheet(child, folderName, parsed))
                 }
             }
 
@@ -385,14 +532,7 @@ class SpreadsheetRepository(
                     if (targetMatches.any { it.first.id == child.id }) continue // Skip already tried
                     val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
                     if (parsed != null && parsed.sheetNames.isNotEmpty()) {
-                        foundSpreadsheets.add(
-                            com.example.analizer.model.FolderSpreadsheet(
-                                folderName = folderName,
-                                spreadsheetName = child.name,
-                                sheetNames = parsed.sheetNames,
-                                sheets = parsed.sheets
-                            )
-                        )
+                        foundSpreadsheets.add(createFolderSpreadsheet(child, folderName, parsed))
                     }
                 }
             }
@@ -404,14 +544,7 @@ class SpreadsheetRepository(
                     if (child.isSpreadsheet && processedFileIds.add(child.id)) {
                         val parsed = fetchDriveSpreadsheetData(child.id, child.mimeType, apiKey)
                         if (parsed != null && parsed.sheetNames.isNotEmpty()) {
-                            foundSpreadsheets.add(
-                                com.example.analizer.model.FolderSpreadsheet(
-                                    folderName = rootName,
-                                    spreadsheetName = child.name,
-                                    sheetNames = parsed.sheetNames,
-                                    sheets = parsed.sheets
-                                )
-                            )
+                            foundSpreadsheets.add(createFolderSpreadsheet(child, rootName, parsed))
                         }
                     }
                 }
@@ -423,10 +556,11 @@ class SpreadsheetRepository(
                 if (extractedId.isNotBlank() && extractedId != folderId) {
                     val parsed = fetchDriveSpreadsheetData(extractedId, "application/vnd.google-apps.spreadsheet", apiKey)
                     if (parsed != null && parsed.sheetNames.isNotEmpty()) {
+                        val realName = fetchDriveTitleFromHtml(extractedId) ?: targetSpreadsheetName
                         foundSpreadsheets.add(
                             com.example.analizer.model.FolderSpreadsheet(
-                                folderName = rootName,
-                                spreadsheetName = targetSpreadsheetName,
+                                folderName = realName,
+                                spreadsheetName = realName,
                                 sheetNames = parsed.sheetNames,
                                 sheets = parsed.sheets
                             )
@@ -668,18 +802,34 @@ class SpreadsheetRepository(
         val request = Request.Builder().url(url).build()
         try {
             okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body?.string() ?: return null
-                val json = org.json.JSONObject(body)
-                return DriveItem(
-                    id = json.optString("id"),
-                    name = json.optString("name"),
-                    mimeType = json.optString("mimeType")
-                )
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (!body.isNullOrBlank()) {
+                        val json = org.json.JSONObject(body)
+                        val name = json.optString("name")
+                        val mimeType = json.optString("mimeType")
+                        if (name.isNotBlank()) {
+                            return DriveItem(
+                                id = json.optString("id"),
+                                name = name,
+                                mimeType = mimeType
+                            )
+                        }
+                    }
+                }
             }
         } catch (_: Exception) {
-            return null
+            // ignore
         }
+        val htmlTitle = fetchDriveTitleFromHtml(id)
+        if (!htmlTitle.isNullOrBlank()) {
+            return DriveItem(
+                id = id,
+                name = htmlTitle,
+                mimeType = "application/vnd.google-apps.spreadsheet"
+            )
+        }
+        return null
     }
 
     private fun getDriveItemName(id: String, apiKey: String): String? {

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -30,6 +32,7 @@ import com.example.analizer.Screen
 import com.example.analizer.model.AnalysisConfig
 import com.example.analizer.model.ColumnStats
 import com.example.analizer.model.SpreadsheetData
+import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -42,8 +45,9 @@ fun AnalyticsScreen(
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Estatísticas", "Gráfico de Barras", "Gráfico de Linhas", "Distribuição", "Valores Brutos")
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val coroutineScope = rememberCoroutineScope()
 
     var activeTooltipIndex by remember { mutableStateOf<Int?>(null) }
 
@@ -143,20 +147,17 @@ fun AnalyticsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 // Tabs for Analytics views
                 ScrollableTabRow(
-                    selectedTabIndex = selectedTab,
+                    selectedTabIndex = pagerState.currentPage,
                     edgePadding = 0.dp,
                     containerColor = Color(0xFFF5E8C7),
                     contentColor = Color(0xFF0D1525),
                     indicator = { tabPositions ->
-                        if (selectedTab < tabPositions.size) {
+                        if (pagerState.currentPage < tabPositions.size) {
                             TabRowDefaults.SecondaryIndicator(
-                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
                                 color = Color(0xFFEBA036)
                             )
                         }
@@ -165,9 +166,11 @@ fun AnalyticsScreen(
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
-                            selected = selectedTab == index,
+                            selected = pagerState.currentPage == index,
                             onClick = {
-                                selectedTab = index
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(index)
+                                }
                                 activeTooltipIndex = null
                             },
                             text = { Text(title, fontWeight = FontWeight.SemiBold) },
@@ -177,56 +180,71 @@ fun AnalyticsScreen(
                     }
                 }
 
-                if (selectedTab == 0) {
-                    StatisticsTab(columnStats = columnStats, config = config, spreadsheetData = spreadsheetData)
-                } else if (columnStats.isEmpty()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp)
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) { page ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Analytics,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "Nenhuma análise executada.",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Configure as colunas e clique em 'Executar Análise' ou verifique os dados.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        if (page == 0) {
+                            StatisticsTab(columnStats = columnStats, config = config, spreadsheetData = spreadsheetData)
+                        } else if (columnStats.isEmpty()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp)
                             ) {
-                                OutlinedButton(onClick = { onScreenSelected(Screen.Config) }) {
-                                    Text("Configurar")
-                                }
-                                Button(onClick = { onScreenSelected(Screen.Data) }) {
-                                    Text("Ver Dados")
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Analytics,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Nenhuma análise executada.",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Configure as colunas e clique em 'Executar Análise' ou verifique os dados.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        OutlinedButton(onClick = { onScreenSelected(Screen.Config) }) {
+                                            Text("Configurar")
+                                        }
+                                        Button(onClick = { onScreenSelected(Screen.Data) }) {
+                                            Text("Ver Dados")
+                                        }
+                                    }
                                 }
                             }
+                        } else {
+                            when (page) {
+                                1 -> BarChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
+                                2 -> LineChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
+                                3 -> DistributionTab(columnStats)
+                                4 -> RawValuesTab(columnStats)
+                            }
                         }
-                    }
-                } else {
-                    when (selectedTab) {
-                        1 -> BarChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
-                        2 -> LineChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
-                        3 -> DistributionTab(columnStats)
-                        4 -> RawValuesTab(columnStats)
+
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
