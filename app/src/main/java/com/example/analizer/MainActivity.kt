@@ -10,8 +10,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.analizer.ui.SpreadsheetTableScreen
+import com.example.analizer.ui.components.ImportProgressDialog
 import com.example.analizer.ui.screens.AnalyticsScreen
 import com.example.analizer.ui.screens.ConfigScreen
 import com.example.analizer.ui.screens.ImportScreen
@@ -52,10 +54,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainApp(viewModel: AnalyzerViewModel) {
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.initPersistence(context)
+    }
+
     val spreadsheetData by viewModel.spreadsheetData.collectAsStateWithLifecycle()
     val analysisConfig by viewModel.analysisConfig.collectAsStateWithLifecycle()
     val columnStats by viewModel.columnStats.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val importProgress by viewModel.importProgress.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val inputUrl by viewModel.inputUrl.collectAsStateWithLifecycle()
     val targetSpreadsheetName by viewModel.targetSpreadsheetName.collectAsStateWithLifecycle()
@@ -67,6 +76,9 @@ fun MainApp(viewModel: AnalyzerViewModel) {
             currentScreen = Screen.Data
         }
     }
+
+    // Modal progress window shown during any import flow
+    ImportProgressDialog(progressState = importProgress)
 
     when (currentScreen) {
         is Screen.Import -> {

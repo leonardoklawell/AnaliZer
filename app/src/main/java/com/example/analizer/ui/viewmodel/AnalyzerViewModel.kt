@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.analizer.data.AppPersistenceManager
 import com.example.analizer.data.SpreadsheetRepository
 import com.example.analizer.domain.StatisticsEngine
 import com.example.analizer.model.AnalysisConfig
@@ -12,16 +13,26 @@ import com.example.analizer.model.ColumnStats
 import com.example.analizer.model.DisplayGroup
 import com.example.analizer.model.DisplayGroupItem
 import com.example.analizer.model.SpreadsheetData
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+data class ImportProgressState(
+    val isImporting: Boolean = false,
+    val title: String = "Importando Planilha",
+    val stageMessage: String = "",
+    val progress: Float = 0f,
+    val stepText: String = ""
+)
 
 class AnalyzerViewModel(
     private val repository: SpreadsheetRepository = SpreadsheetRepository(),
     private val statisticsEngine: StatisticsEngine = StatisticsEngine()
 ) : ViewModel() {
+
+    private var persistenceManager: AppPersistenceManager? = null
 
     private val _spreadsheetData = MutableStateFlow<SpreadsheetData?>(null)
     val spreadsheetData: StateFlow<SpreadsheetData?> = _spreadsheetData.asStateFlow()
@@ -35,6 +46,9 @@ class AnalyzerViewModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _importProgress = MutableStateFlow(ImportProgressState())
+    val importProgress: StateFlow<ImportProgressState> = _importProgress.asStateFlow()
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
@@ -43,6 +57,34 @@ class AnalyzerViewModel(
 
     private val _targetSpreadsheetName = MutableStateFlow("")
     val targetSpreadsheetName: StateFlow<String> = _targetSpreadsheetName.asStateFlow()
+
+    fun initPersistence(context: Context) {
+        if (persistenceManager == null) {
+            val manager = AppPersistenceManager(context.applicationContext)
+            persistenceManager = manager
+            viewModelScope.launch {
+                val (savedData, savedConfig) = manager.loadSavedData()
+                if (savedData != null) {
+                    _spreadsheetData.value = savedData
+                    val configToUse = savedConfig ?: AnalysisConfig(
+                        sheetName = savedData.sheetNames.firstOrNull() ?: ""
+                    )
+                    _analysisConfig.value = configToUse
+                    runAnalysisForData(savedData, configToUse)
+                }
+            }
+        }
+    }
+
+    private fun saveCurrentDataAndConfig() {
+        val manager = persistenceManager ?: return
+        val data = _spreadsheetData.value ?: return
+        val config = _analysisConfig.value
+        viewModelScope.launch {
+            manager.saveSpreadsheetData(data)
+            manager.saveAnalysisConfig(config)
+        }
+    }
 
     fun setInputUrl(url: String) {
         _inputUrl.value = url
@@ -61,11 +103,25 @@ class AnalyzerViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            _importProgress.value = ImportProgressState(
+                isImporting = true,
+                title = "Importando Google Sheets / Drive",
+                stageMessage = "Estabelecendo conexão e acessando dados...",
+                progress = 0.20f,
+                stepText = "Etapa 1 de 4"
+            )
             try {
                 val result = repository.fetchGoogleSheet(trimmedUrl, targetSpreadsheetName)
                 _isLoading.value = false
                 result.onSuccess { data ->
                     try {
+                        _importProgress.value = ImportProgressState(
+                            isImporting = true,
+                            title = "Importando Google Sheets / Drive",
+                            stageMessage = "Lendo pastas, tabelas e abas da planilha...",
+                            progress = 0.50f,
+                            stepText = "Etapa 2 de 4"
+                        )
                         _spreadsheetData.value = data
                         val defaultSheet = data.sheetNames.firstOrNull() ?: ""
                         val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
@@ -135,14 +191,36 @@ class AnalyzerViewModel(
                         )
                         _analysisConfig.value = newConfig
                         runAnalysisForData(data, newConfig)
+
+                        _importProgress.value = ImportProgressState(
+                            isImporting = true,
+                            title = "Salvando Localmente",
+                            stageMessage = "Armazenando dados e configurações para próximos acessos...",
+                            progress = 0.85f,
+                            stepText = "Etapa 3 de 4"
+                        )
+                        saveCurrentDataAndConfig()
+
+                        _importProgress.value = ImportProgressState(
+                            isImporting = true,
+                            title = "Importação Concluída!",
+                            stageMessage = "Tudo pronto! Seus dados foram carregados com sucesso.",
+                            progress = 1.0f,
+                            stepText = "Etapa 4 de 4"
+                        )
+                        delay(400)
                     } catch (t: Throwable) {
                         _errorMessage.value = "Erro ao processar dados da planilha: ${t.localizedMessage ?: t.message}"
+                    } finally {
+                        _importProgress.value = ImportProgressState(isImporting = false)
                     }
                 }.onFailure { e ->
                     _errorMessage.value = "Falha ao carregar Google Sheets: ${e.localizedMessage ?: e.message}"
+                    _importProgress.value = ImportProgressState(isImporting = false)
                 }
             } catch (t: Throwable) {
                 _isLoading.value = false
+                _importProgress.value = ImportProgressState(isImporting = false)
                 _errorMessage.value = "Erro na requisição: ${t.localizedMessage ?: t.message}"
             }
         }
@@ -152,6 +230,13 @@ class AnalyzerViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            _importProgress.value = ImportProgressState(
+                isImporting = true,
+                title = "Importando Dados de Exemplo",
+                stageMessage = "Gerando estrutura de pastas e planilhas de exemplo...",
+                progress = 0.30f,
+                stepText = "Etapa 1 de 3"
+            )
             try {
                 val sampleData = repository.createSampleMultiFolderData()
                 _spreadsheetData.value = sampleData
@@ -191,10 +276,29 @@ class AnalyzerViewModel(
                 )
                 _analysisConfig.value = config
                 runAnalysisForData(sampleData, config)
+
+                _importProgress.value = ImportProgressState(
+                    isImporting = true,
+                    title = "Salvando Localmente",
+                    stageMessage = "Mapeando grupos e salvando dados localmente...",
+                    progress = 0.80f,
+                    stepText = "Etapa 2 de 3"
+                )
+                saveCurrentDataAndConfig()
+
+                _importProgress.value = ImportProgressState(
+                    isImporting = true,
+                    title = "Importação Concluída!",
+                    stageMessage = "Exemplo carregado com sucesso!",
+                    progress = 1.0f,
+                    stepText = "Etapa 3 de 3"
+                )
+                delay(300)
             } catch (e: Exception) {
                 _errorMessage.value = "Erro ao carregar exemplo de pastas: ${e.localizedMessage}"
             } finally {
                 _isLoading.value = false
+                _importProgress.value = ImportProgressState(isImporting = false)
             }
         }
     }
@@ -203,6 +307,13 @@ class AnalyzerViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            _importProgress.value = ImportProgressState(
+                isImporting = true,
+                title = "Importando Arquivo Local",
+                stageMessage = "Lendo e analisando o arquivo selecionado...",
+                progress = 0.25f,
+                stepText = "Etapa 1 de 3"
+            )
             try {
                 val result = repository.loadSpreadsheetFromUri(context, uri)
                 _isLoading.value = false
@@ -256,14 +367,36 @@ class AnalyzerViewModel(
                         )
                         _analysisConfig.value = newConfig
                         runAnalysisForData(data, newConfig)
+
+                        _importProgress.value = ImportProgressState(
+                            isImporting = true,
+                            title = "Salvando no Dispositivo",
+                            stageMessage = "Gravando arquivo e estruturas de dados...",
+                            progress = 0.85f,
+                            stepText = "Etapa 2 de 3"
+                        )
+                        saveCurrentDataAndConfig()
+
+                        _importProgress.value = ImportProgressState(
+                            isImporting = true,
+                            title = "Importação Concluída!",
+                            stageMessage = "Arquivo importado e salvo com sucesso!",
+                            progress = 1.0f,
+                            stepText = "Etapa 3 de 3"
+                        )
+                        delay(300)
                     } catch (t: Throwable) {
                         _errorMessage.value = "Erro ao processar arquivo: ${t.localizedMessage ?: t.message}"
+                    } finally {
+                        _importProgress.value = ImportProgressState(isImporting = false)
                     }
                 }.onFailure { e ->
                     _errorMessage.value = "Falha ao ler arquivo: ${e.localizedMessage ?: e.message}"
+                    _importProgress.value = ImportProgressState(isImporting = false)
                 }
             } catch (t: Throwable) {
                 _isLoading.value = false
+                _importProgress.value = ImportProgressState(isImporting = false)
                 _errorMessage.value = "Erro ao abrir arquivo: ${t.localizedMessage ?: t.message}"
             }
         }
@@ -273,6 +406,13 @@ class AnalyzerViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            _importProgress.value = ImportProgressState(
+                isImporting = true,
+                title = "Carregando Dados de Exemplo",
+                stageMessage = "Gerando dados do modelo...",
+                progress = 0.40f,
+                stepText = "Etapa 1 de 2"
+            )
             try {
                 val sampleRows = if (type == "sales") {
                     listOf(
@@ -348,10 +488,21 @@ class AnalyzerViewModel(
                 )
                 _analysisConfig.value = config
                 runAnalysisForData(spreadsheetData, config)
+
+                _importProgress.value = ImportProgressState(
+                    isImporting = true,
+                    title = "Salvando Localmente",
+                    stageMessage = "Dados de exemplo salvos com sucesso!",
+                    progress = 1.0f,
+                    stepText = "Etapa 2 de 2"
+                )
+                saveCurrentDataAndConfig()
+                delay(300)
             } catch (e: Exception) {
                 _errorMessage.value = "Error loading sample data: ${e.localizedMessage}"
             } finally {
                 _isLoading.value = false
+                _importProgress.value = ImportProgressState(isImporting = false)
             }
         }
     }
@@ -361,12 +512,18 @@ class AnalyzerViewModel(
         _spreadsheetData.value?.let { data ->
             runAnalysisForData(data, config)
         }
+        persistenceManager?.let { manager ->
+            viewModelScope.launch {
+                manager.saveAnalysisConfig(config)
+            }
+        }
     }
 
     fun runAnalysis() {
         _spreadsheetData.value?.let { data ->
             runAnalysisForData(data, _analysisConfig.value)
         }
+        saveCurrentDataAndConfig()
     }
 
     private fun runAnalysisForData(data: SpreadsheetData, config: AnalysisConfig) {
