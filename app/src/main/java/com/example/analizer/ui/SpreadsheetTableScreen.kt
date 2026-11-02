@@ -243,13 +243,13 @@ fun SpreadsheetTableScreen(
                                                     selectedSheet = newSheet
                                                     val sheetRows = spreadsheetData.getRows(folder, newSheet)
                                                     val cols = (0 until (sheetRows.firstOrNull()?.size ?: 0)).toList()
-                                                    onConfigChanged(
+                                                     onConfigChanged(
                                                         config.copy(
                                                             selectedFolder = folder,
                                                             sheetName = newSheet,
                                                             selectedColumnIndices = cols,
-                                                            startRow = if (sheetRows.size > 1) 1 else 0,
-                                                            endRow = if (sheetRows.isNotEmpty()) sheetRows.size - 1 else 0
+                                                            startRow = null,
+                                                            endRow = null
                                                         )
                                                     )
                                                 }
@@ -313,8 +313,8 @@ fun SpreadsheetTableScreen(
                                                         config.copy(
                                                             sheetName = sheet,
                                                             selectedColumnIndices = cols,
-                                                            startRow = if (sheetRows.size > 1) 1 else 0,
-                                                            endRow = if (sheetRows.isNotEmpty()) sheetRows.size - 1 else 0
+                                                            startRow = null,
+                                                            endRow = null
                                                         )
                                                     )
                                                 }

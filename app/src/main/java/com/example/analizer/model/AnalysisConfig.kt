@@ -21,11 +21,11 @@ val METRIC_OPTIONS = listOf(
 data class ColumnRangeInterval(
     val id: String = UUID.randomUUID().toString(),
     val name: String = "",
-    val sheetName: String? = null, // specific sheet for this interval, or null to use global
-    val startColumn: Int = 0, // 0-indexed column index
-    val endColumn: Int = 0,   // 0-indexed column index
-    val startRow: Int? = null, // specific start row (or null to use global)
-    val endRow: Int? = null,   // specific end row (or null to use global)
+    val sheetName: String? = null,
+    val startColumn: Int = 0,
+    val endColumn: Int = 0,
+    val startRow: Int? = null,
+    val endRow: Int? = null,
     val metric: String = "Média"
 )
 
@@ -45,11 +45,11 @@ data class DisplayGroupItem(
 data class DisplayGroup(
     val id: String = UUID.randomUUID().toString(),
     val name: String = "",
-    val nameSourceType: String = "TEXT", // "TEXT" or "CELL" (or "MANUAL")
+    val nameSourceType: String = "TEXT",
     val cellReference: String = "A1",
-    val selectedSheets: List<String> = emptyList(), // Multi-select sheets
-    val selectedFolder: String = "", // Parent folder name
-    val items: List<DisplayGroupItem> = listOf(DisplayGroupItem()),
+    val selectedSheets: List<String> = emptyList(),
+    val selectedFolder: String = "",
+    val items: List<DisplayGroupItem> = emptyList(),
     val enabledForAnalysis: Boolean = true,
     val displayOrder: Int = 0
 )
@@ -74,20 +74,20 @@ val DEFAULT_CARD_FIELD_NAMES = listOf(
 @Serializable
 data class CardFieldMapping(
     val id: String = UUID.randomUUID().toString(),
-    val fieldIndex: Int = 0, // 0 to 13 for the 14 card detail fields
+    val fieldIndex: Int = 0,
     val titleItemReference: String = "",
-    val valueItemReference: String = ""
+    val valueItemReference: String = "none" // Default unconfigured ("--")
 )
 
 @Serializable
 data class CardConfig(
     val id: String = UUID.randomUUID().toString(),
-    val groupId: String = "", // selected group for this card -> card title is this group's name
+    val groupId: String = "",
     val fieldMappings: List<CardFieldMapping> = (0 until 14).map { idx ->
         CardFieldMapping(
             fieldIndex = idx,
             titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "Campo ${idx + 1}" },
-            valueItemReference = ""
+            valueItemReference = "none"
         )
     }
 )
@@ -101,8 +101,8 @@ data class AnalysisConfig(
     val selectedColumnIndices: List<Int> = emptyList(),
     val columnMetrics: Map<Int, String> = emptyMap(),
     val selectedMetrics: Map<Int, String> = emptyMap(),
-    val startRow: Int = 0,
-    val endRow: Int = Int.MAX_VALUE,
+    val startRow: Int? = null,
+    val endRow: Int? = null,
     val intervals: List<ColumnRangeInterval> = emptyList(),
     val displayGroups: List<DisplayGroup> = emptyList(),
     val chartSelectedGroupIds: List<String> = emptyList(),
@@ -110,35 +110,11 @@ data class AnalysisConfig(
     val cardFieldMappings: List<CardFieldMapping> = emptyList(),
     val cards: List<CardConfig> = emptyList()
 ) {
-    val start: Int get() = startRow
-    val end: Int get() = endRow
-    val rowRange: IntRange get() = startRow..endRow
+    val start: Int? get() = startRow
+    val end: Int? get() = endRow
 
     val effectiveDisplayGroups: List<DisplayGroup> get() {
-        val groups = if (displayGroups.isNotEmpty()) {
-            displayGroups
-        } else if (intervals.isNotEmpty()) {
-            intervals.mapIndexed { index, interval ->
-                DisplayGroup(
-                    id = interval.id,
-                    name = interval.name.ifBlank { "Grupo ${index + 1}" },
-                    selectedSheets = if (!interval.sheetName.isNullOrBlank()) listOf(interval.sheetName) else emptyList(),
-                    items = listOf(
-                        DisplayGroupItem(
-                            startColumn = interval.startColumn,
-                            endColumn = interval.endColumn,
-                            startRow = interval.startRow,
-                            endRow = interval.endRow,
-                            metric = interval.metric
-                        )
-                    ),
-                    displayOrder = index
-                )
-            }
-        } else {
-            emptyList()
-        }
-        return groups.sortedBy { it.displayOrder }
+        return displayGroups.sortedBy { it.displayOrder }
     }
 
     val effectiveCards: List<CardConfig> get() {
@@ -147,13 +123,13 @@ data class AnalysisConfig(
         if (groups.isNotEmpty()) {
             return groups.map { grp ->
                 CardConfig(
-                    id = UUID.randomUUID().toString(),
+                    id = "card_${grp.id}",
                     groupId = grp.id,
                     fieldMappings = (0 until 14).map { idx ->
                         CardFieldMapping(
                             fieldIndex = idx,
                             titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "Campo ${idx + 1}" },
-                            valueItemReference = ""
+                            valueItemReference = "none"
                         )
                     }
                 )
@@ -161,13 +137,13 @@ data class AnalysisConfig(
         }
         return listOf(
             CardConfig(
-                id = UUID.randomUUID().toString(),
+                id = "card_default",
                 groupId = "",
                 fieldMappings = (0 until 14).map { idx ->
                     CardFieldMapping(
                         fieldIndex = idx,
                         titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "Campo ${idx + 1}" },
-                        valueItemReference = ""
+                        valueItemReference = "none"
                     )
                 }
             )

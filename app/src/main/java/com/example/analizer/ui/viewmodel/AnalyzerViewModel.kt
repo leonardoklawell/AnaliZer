@@ -8,10 +8,7 @@ import com.example.analizer.data.AppPersistenceManager
 import com.example.analizer.data.SpreadsheetRepository
 import com.example.analizer.domain.StatisticsEngine
 import com.example.analizer.model.AnalysisConfig
-import com.example.analizer.model.ColumnRangeInterval
 import com.example.analizer.model.ColumnStats
-import com.example.analizer.model.DisplayGroup
-import com.example.analizer.model.DisplayGroupItem
 import com.example.analizer.model.SpreadsheetData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,12 +24,20 @@ data class ImportProgressState(
     val stepText: String = ""
 )
 
+sealed class ImportSource {
+    data class GoogleSheet(val url: String, val targetName: String) : ImportSource()
+    data class LocalUri(val uriString: String) : ImportSource()
+    data class SampleData(val type: String) : ImportSource()
+    data object SampleFolders : ImportSource()
+}
+
 class AnalyzerViewModel(
     private val repository: SpreadsheetRepository = SpreadsheetRepository(),
     private val statisticsEngine: StatisticsEngine = StatisticsEngine()
 ) : ViewModel() {
 
     private var persistenceManager: AppPersistenceManager? = null
+    private var lastImportSource: ImportSource? = null
 
     private val _spreadsheetData = MutableStateFlow<SpreadsheetData?>(null)
     val spreadsheetData: StateFlow<SpreadsheetData?> = _spreadsheetData.asStateFlow()
@@ -100,6 +105,7 @@ class AnalyzerViewModel(
             _errorMessage.value = "Por favor, insira um link válido do Google Sheets ou Pasta do Google Drive."
             return
         }
+        lastImportSource = ImportSource.GoogleSheet(trimmedUrl, targetSpreadsheetName)
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -127,67 +133,16 @@ class AnalyzerViewModel(
                         val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
                         val colCount = firstSheetRows.firstOrNull()?.size ?: 0
                         val allCols = (0 until colCount).toList()
-                        val defaultEndRow = if (firstSheetRows.isNotEmpty()) firstSheetRows.size - 1 else 0
 
-                        val defaultIntervals = if (colCount > 0) {
-                            listOf(
-                                ColumnRangeInterval(
-                                    startColumn = 0,
-                                    endColumn = colCount - 1,
-                                    startRow = null,
-                                    endRow = null,
-                                    metric = "Média"
-                                )
-                            )
-                        } else emptyList()
-
-                        val defaultDisplayGroups = if (data.folders.isNotEmpty()) {
-                            data.folders.mapIndexed { idx, folder ->
-                                val fSheet = folder.sheetNames.firstOrNull() ?: ""
-                                val fRows = folder.sheets[fSheet] ?: emptyList()
-                                val cCount = fRows.firstOrNull()?.size ?: 0
-                                DisplayGroup(
-                                    name = folder.folderName,
-                                    selectedFolder = folder.folderName,
-                                    selectedSheets = if (fSheet.isNotBlank()) listOf(fSheet) else emptyList(),
-                                    items = listOf(
-                                        DisplayGroupItem(
-                                            startColumn = 0,
-                                            endColumn = (cCount - 1).coerceAtLeast(0),
-                                            startRow = null,
-                                            endRow = null,
-                                            metric = "Média"
-                                        )
-                                    ),
-                                    displayOrder = idx
-                                )
-                            }
-                        } else if (colCount > 0) {
-                            listOf(
-                                DisplayGroup(
-                                    name = "Grupo 1",
-                                    selectedSheets = if (defaultSheet.isNotBlank()) listOf(defaultSheet) else emptyList(),
-                                    items = listOf(
-                                        DisplayGroupItem(
-                                            startColumn = 0,
-                                            endColumn = colCount - 1,
-                                            startRow = null,
-                                            endRow = null,
-                                            metric = "Média"
-                                        )
-                                    )
-                                )
-                            )
-                        } else emptyList()
-
+                        // DO NOT auto-create groups, intervals or items!
                         val newConfig = AnalysisConfig(
                             sheetName = defaultSheet,
                             headerRowIndex = 0,
                             selectedColumnIndices = allCols,
-                            startRow = if (firstSheetRows.size > 1) 1 else 0,
-                            endRow = defaultEndRow,
-                            intervals = defaultIntervals,
-                            displayGroups = defaultDisplayGroups
+                            startRow = null,
+                            endRow = null,
+                            intervals = emptyList(),
+                            displayGroups = emptyList()
                         )
                         _analysisConfig.value = newConfig
                         runAnalysisForData(data, newConfig)
@@ -227,6 +182,7 @@ class AnalyzerViewModel(
     }
 
     fun loadSampleFolderData() {
+        lastImportSource = ImportSource.SampleFolders
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -245,34 +201,14 @@ class AnalyzerViewModel(
                 val rows = firstFolder?.sheets?.get(defaultSheet) ?: sampleData.sheets[defaultSheet] ?: emptyList()
                 val colCount = rows.firstOrNull()?.size ?: 0
 
-                val defaultDisplayGroups = sampleData.folders.mapIndexed { idx, folder ->
-                    val fSheet = folder.sheetNames.firstOrNull() ?: ""
-                    val fRows = folder.sheets[fSheet] ?: emptyList()
-                    val cCount = fRows.firstOrNull()?.size ?: 0
-                    DisplayGroup(
-                        name = folder.folderName,
-                        selectedFolder = folder.folderName,
-                        selectedSheets = if (fSheet.isNotBlank()) listOf(fSheet) else emptyList(),
-                        items = listOf(
-                            DisplayGroupItem(
-                                startColumn = 0,
-                                endColumn = (cCount - 1).coerceAtLeast(0),
-                                startRow = 1,
-                                endRow = fRows.size - 1,
-                                metric = "Média"
-                            )
-                        ),
-                        displayOrder = idx
-                    )
-                }
-
+                // DO NOT auto-create groups, intervals or items!
                 val config = AnalysisConfig(
                     sheetName = defaultSheet,
                     headerRowIndex = 0,
                     selectedColumnIndices = (0 until colCount).toList(),
-                    startRow = 1,
-                    endRow = if (rows.size > 1) rows.size - 1 else 0,
-                    displayGroups = defaultDisplayGroups
+                    startRow = null,
+                    endRow = null,
+                    displayGroups = emptyList()
                 )
                 _analysisConfig.value = config
                 runAnalysisForData(sampleData, config)
@@ -280,7 +216,7 @@ class AnalyzerViewModel(
                 _importProgress.value = ImportProgressState(
                     isImporting = true,
                     title = "Salvando Localmente",
-                    stageMessage = "Mapeando grupos e salvando dados localmente...",
+                    stageMessage = "Salvando dados localmente...",
                     progress = 0.80f,
                     stepText = "Etapa 2 de 3"
                 )
@@ -304,6 +240,7 @@ class AnalyzerViewModel(
     }
 
     fun loadUri(context: Context, uri: Uri) {
+        lastImportSource = ImportSource.LocalUri(uri.toString())
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -324,46 +261,16 @@ class AnalyzerViewModel(
                         val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
                         val colCount = firstSheetRows.firstOrNull()?.size ?: 0
                         val allCols = (0 until colCount).toList()
-                        val defaultEndRow = if (firstSheetRows.isNotEmpty()) firstSheetRows.size - 1 else 0
 
-                        val defaultIntervals = if (colCount > 0) {
-                            listOf(
-                                ColumnRangeInterval(
-                                    startColumn = 0,
-                                    endColumn = colCount - 1,
-                                    startRow = null,
-                                    endRow = null,
-                                    metric = "Média"
-                                )
-                            )
-                        } else emptyList()
-
-                        val defaultDisplayGroups = if (colCount > 0) {
-                            listOf(
-                                DisplayGroup(
-                                    name = "Grupo 1",
-                                    selectedSheets = if (defaultSheet.isNotBlank()) listOf(defaultSheet) else emptyList(),
-                                    items = listOf(
-                                        DisplayGroupItem(
-                                            startColumn = 0,
-                                            endColumn = colCount - 1,
-                                            startRow = null,
-                                            endRow = null,
-                                            metric = "Média"
-                                        )
-                                    )
-                                )
-                            )
-                        } else emptyList()
-
+                        // DO NOT auto-create groups, intervals or items!
                         val newConfig = AnalysisConfig(
                             sheetName = defaultSheet,
                             headerRowIndex = 0,
                             selectedColumnIndices = allCols,
-                            startRow = if (firstSheetRows.size > 1) 1 else 0,
-                            endRow = defaultEndRow,
-                            intervals = defaultIntervals,
-                            displayGroups = defaultDisplayGroups
+                            startRow = null,
+                            endRow = null,
+                            intervals = emptyList(),
+                            displayGroups = emptyList()
                         )
                         _analysisConfig.value = newConfig
                         runAnalysisForData(data, newConfig)
@@ -403,6 +310,7 @@ class AnalyzerViewModel(
     }
 
     fun loadSampleData(type: String = "sales") {
+        lastImportSource = ImportSource.SampleData(type)
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -447,44 +355,16 @@ class AnalyzerViewModel(
                 _spreadsheetData.value = spreadsheetData
                 val colCount = sampleRows.firstOrNull()?.size ?: 0
                 val allCols = (0 until colCount).toList()
-                val defaultIntervals = if (colCount > 0) {
-                    listOf(
-                        ColumnRangeInterval(
-                            startColumn = 0,
-                            endColumn = colCount - 1,
-                            startRow = null,
-                            endRow = null,
-                            metric = "Média"
-                        )
-                    )
-                } else emptyList()
 
-                val defaultDisplayGroups = if (colCount > 0) {
-                    listOf(
-                        DisplayGroup(
-                            name = "Grupo 1",
-                            selectedSheets = listOf(sheetName),
-                            items = listOf(
-                                DisplayGroupItem(
-                                    startColumn = 0,
-                                    endColumn = colCount - 1,
-                                    startRow = null,
-                                    endRow = null,
-                                    metric = "Média"
-                                )
-                            )
-                        )
-                    )
-                } else emptyList()
-
+                // DO NOT auto-create groups, intervals or items!
                 val config = AnalysisConfig(
                     sheetName = sheetName,
                     headerRowIndex = 0,
                     selectedColumnIndices = allCols,
-                    startRow = 1,
-                    endRow = sampleRows.size - 1,
-                    intervals = defaultIntervals,
-                    displayGroups = defaultDisplayGroups
+                    startRow = null,
+                    endRow = null,
+                    intervals = emptyList(),
+                    displayGroups = emptyList()
                 )
                 _analysisConfig.value = config
                 runAnalysisForData(spreadsheetData, config)
@@ -503,6 +383,107 @@ class AnalyzerViewModel(
             } finally {
                 _isLoading.value = false
                 _importProgress.value = ImportProgressState(isImporting = false)
+            }
+        }
+    }
+
+    fun reloadData(context: Context) {
+        val currentConfig = _analysisConfig.value
+        val source = lastImportSource
+        if (source == null) {
+            _spreadsheetData.value?.let { data ->
+                runAnalysisForData(data, currentConfig)
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            _importProgress.value = ImportProgressState(
+                isImporting = true,
+                title = "Recarregando Dados",
+                stageMessage = "Atualizando planilha a partir da fonte...",
+                progress = 0.30f,
+                stepText = "Etapa 1 de 2"
+            )
+            try {
+                when (source) {
+                    is ImportSource.GoogleSheet -> {
+                        val res = repository.fetchGoogleSheet(source.url, source.targetName)
+                        res.onSuccess { data ->
+                            _spreadsheetData.value = data
+                            runAnalysisForData(data, currentConfig)
+                            saveCurrentDataAndConfig()
+                        }.onFailure { e ->
+                            _errorMessage.value = "Erro ao recarregar Google Sheets: ${e.localizedMessage}"
+                        }
+                    }
+                    is ImportSource.LocalUri -> {
+                        val uri = Uri.parse(source.uriString)
+                        val res = repository.loadSpreadsheetFromUri(context, uri)
+                        res.onSuccess { data ->
+                            _spreadsheetData.value = data
+                            runAnalysisForData(data, currentConfig)
+                            saveCurrentDataAndConfig()
+                        }.onFailure { e ->
+                            _errorMessage.value = "Erro ao recarregar arquivo local: ${e.localizedMessage}"
+                        }
+                    }
+                    is ImportSource.SampleFolders -> {
+                        val sampleData = repository.createSampleMultiFolderData()
+                        _spreadsheetData.value = sampleData
+                        runAnalysisForData(sampleData, currentConfig)
+                        saveCurrentDataAndConfig()
+                    }
+                    is ImportSource.SampleData -> {
+                        loadSampleData(source.type)
+                    }
+                }
+                _importProgress.value = ImportProgressState(
+                    isImporting = true,
+                    title = "Recarregamento Concluído!",
+                    stageMessage = "Dados atualizados com sucesso mantendo suas configurações!",
+                    progress = 1.0f,
+                    stepText = "Etapa 2 de 2"
+                )
+                delay(300)
+            } catch (e: Exception) {
+                _errorMessage.value = "Erro ao recarregar dados: ${e.localizedMessage}"
+            } finally {
+                _isLoading.value = false
+                _importProgress.value = ImportProgressState(isImporting = false)
+            }
+        }
+    }
+
+    fun exportConfigJson(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val manager = persistenceManager ?: AppPersistenceManager(context)
+                manager.exportConfigToUri(context, uri, _analysisConfig.value)
+            } catch (e: Exception) {
+                _errorMessage.value = "Erro ao exportar configurações: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun importConfigJson(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val manager = persistenceManager ?: AppPersistenceManager(context)
+                val importedConfig = manager.importConfigFromUri(context, uri)
+                if (importedConfig != null) {
+                    _analysisConfig.value = importedConfig
+                    _spreadsheetData.value?.let { data ->
+                        runAnalysisForData(data, importedConfig)
+                    }
+                    manager.saveAnalysisConfig(importedConfig)
+                } else {
+                    _errorMessage.value = "Arquivo de configuração inválido."
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Erro ao importar configurações: ${e.localizedMessage}"
             }
         }
     }
@@ -527,11 +508,13 @@ class AnalyzerViewModel(
     }
 
     private fun runAnalysisForData(data: SpreadsheetData, config: AnalysisConfig) {
-        try {
-            val stats = statisticsEngine.calculateStats(data, config)
-            _columnStats.value = stats
-        } catch (e: Exception) {
-            _errorMessage.value = "Analysis error: ${e.localizedMessage}"
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            try {
+                val stats = statisticsEngine.calculateStats(data, config)
+                _columnStats.value = stats
+            } catch (e: Exception) {
+                _errorMessage.value = "Analysis error: ${e.localizedMessage}"
+            }
         }
     }
 

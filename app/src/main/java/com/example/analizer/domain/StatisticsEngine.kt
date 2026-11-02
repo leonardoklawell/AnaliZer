@@ -27,7 +27,7 @@ class StatisticsEngine {
 
         return calculateStats(
             sheet = sheet,
-            rowRange = config.rowRange,
+            rowRange = IntRange(config.startRow ?: 0, config.endRow ?: maxOf(0, sheet.size - 1)),
             columnIndices = config.selectedColumnIndices,
             headerRowIndex = config.headerRowIndex,
             customColumnTitles = config.customColumnTitles
@@ -63,8 +63,8 @@ class StatisticsEngine {
             val endCol = interval.endColumn.coerceIn(0, maxOf(0, totalCols - 1))
             if (startCol > endCol) continue
 
-            val startR = (interval.startRow ?: config.startRow).coerceIn(0, maxOf(0, maxRowIdx))
-            val endR = (interval.endRow ?: config.endRow).coerceIn(0, maxOf(0, maxRowIdx))
+            val startR = (interval.startRow ?: config.startRow ?: 0).coerceIn(0, maxOf(0, maxRowIdx))
+            val endR = (interval.endRow ?: config.endRow ?: maxRowIdx).coerceIn(0, maxOf(0, maxRowIdx))
 
             for (colIndex in startCol..endCol) {
                 val baseColumnName = resolveColumnName(sheet, colIndex, config.headerRowIndex, config.customColumnTitles)
@@ -202,8 +202,8 @@ class StatisticsEngine {
                     val endCol = item.endColumn.coerceIn(0, maxOf(0, totalCols - 1))
                     if (startCol > endCol) continue
 
-                    val startR = (item.startRow ?: config.startRow).coerceIn(0, maxOf(0, maxRowIdx))
-                    val endR = (item.endRow ?: config.endRow).coerceIn(0, maxOf(0, maxRowIdx))
+                    val startR = (item.startRow ?: config.startRow ?: 0).coerceIn(0, maxOf(0, maxRowIdx))
+                    val endR = (item.endRow ?: config.endRow ?: maxRowIdx).coerceIn(0, maxOf(0, maxRowIdx))
 
                     for (colIndex in startCol..endCol) {
                         val baseColName = resolveColumnName(sheet, colIndex, config.headerRowIndex, config.customColumnTitles)

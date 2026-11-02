@@ -42,6 +42,9 @@ fun ConfigScreen(
     columnStats: List<com.example.analizer.model.ColumnStats> = emptyList(),
     onConfigChanged: (AnalysisConfig) -> Unit,
     onRunAnalysis: () -> Unit,
+    onExportConfig: () -> Unit = {},
+    onImportConfig: () -> Unit = {},
+    onReloadData: () -> Unit = {},
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
@@ -53,6 +56,14 @@ fun ConfigScreen(
                     navigationIcon = {
                         IconButton(onClick = { onScreenSelected(Screen.Import) }) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onExportConfig) {
+                            Icon(Icons.Rounded.FileDownload, contentDescription = "Exportar Configurações", tint = Color(0xFFEBA036))
+                        }
+                        IconButton(onClick = onImportConfig) {
+                            Icon(Icons.Rounded.FolderOpen, contentDescription = "Importar Configurações", tint = Color(0xFFEBA036))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -174,7 +185,17 @@ fun ConfigScreen(
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
                     }
                 },
-                actions = {},
+                actions = {
+                    IconButton(onClick = onExportConfig) {
+                        Icon(Icons.Rounded.FileDownload, contentDescription = "Exportar Configurações", tint = Color(0xFFEBA036))
+                    }
+                    IconButton(onClick = onImportConfig) {
+                        Icon(Icons.Rounded.FolderOpen, contentDescription = "Importar Configurações", tint = Color(0xFFEBA036))
+                    }
+                    IconButton(onClick = onReloadData) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = "Recarregar Dados", tint = Color(0xFFEBA036))
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525),
                     titleContentColor = androidx.compose.ui.graphics.Color.White,
@@ -860,8 +881,8 @@ fun DisplayGroupCard(
     currentGlobalSheet: String,
     headerRowIndex: Int,
     customColumnTitles: Map<Int, String>,
-    globalStartRow: Int,
-    globalEndRow: Int,
+    globalStartRow: Int?,
+    globalEndRow: Int?,
     maxRowIndex: Int,
     onUpdateGroup: (DisplayGroup) -> Unit,
     onDeleteGroup: () -> Unit
@@ -1200,8 +1221,8 @@ fun DisplayGroupItemCard(
     maxRowIndex: Int,
     headerRow: List<String>,
     customColumnTitles: Map<Int, String>,
-    globalStartRow: Int,
-    globalEndRow: Int,
+    globalStartRow: Int?,
+    globalEndRow: Int?,
     onUpdateItem: (DisplayGroupItem) -> Unit,
     onDeleteItem: () -> Unit,
     canDelete: Boolean
@@ -1280,20 +1301,18 @@ fun DisplayGroupItemCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                RowDropdown(
+                RowInputField(
                     label = "Linha Início",
                     selectedRow = item.startRow,
-                    maxRowIndex = maxRowIndex,
                     onRowSelected = { row ->
                         onUpdateItem(item.copy(startRow = row))
                     },
                     modifier = Modifier.weight(1f)
                 )
 
-                RowDropdown(
+                RowInputField(
                     label = "Linha Fim",
                     selectedRow = item.endRow,
-                    maxRowIndex = maxRowIndex,
                     onRowSelected = { row ->
                         onUpdateItem(item.copy(endRow = row))
                     },
@@ -1312,58 +1331,44 @@ fun DisplayGroupItemCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RowDropdown(
+fun RowInputField(
     label: String,
     selectedRow: Int?,
-    maxRowIndex: Int,
     onRowSelected: (Int?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    val options = (0..minOf(998, maxRowIndex)).map { it }
-    val selectedIndex = selectedRow ?: 0
-    val selectedText = "${selectedIndex + 1}"
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
-        modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = selectedText,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-            shape = RoundedCornerShape(8.dp),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, color = Color.White),
-            colors = darkTextFieldColors()
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(Color(0xFF02121C))
-        ) {
-            for (rowIdx in options) {
-                DropdownMenuItem(
-                    text = { Text("${rowIdx + 1}", color = Color.White) },
-                    colors = MenuDefaults.itemColors(textColor = Color.White),
-                    onClick = {
-                        expanded = false
-                        onRowSelected(rowIdx)
-                    }
-                )
-            }
-        }
+    var textValue by remember(selectedRow) {
+        mutableStateOf(if (selectedRow != null) "${selectedRow + 1}" else "")
     }
+
+    OutlinedTextField(
+        value = textValue,
+        onValueChange = { input ->
+            val clean = input.filter { it.isDigit() }
+            textValue = clean
+            if (clean.isBlank()) {
+                onRowSelected(null)
+            } else {
+                val rowNumber = clean.toIntOrNull()
+                if (rowNumber != null && rowNumber > 0) {
+                    onRowSelected(rowNumber - 1)
+                } else if (rowNumber == 0) {
+                    onRowSelected(0)
+                }
+            }
+        },
+        label = { Text(label, fontSize = 11.sp) },
+        placeholder = { Text("Livre", color = Color(0xFF788497), fontSize = 11.sp) },
+        modifier = modifier,
+        singleLine = true,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+        ),
+        shape = RoundedCornerShape(8.dp),
+        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, color = Color.White),
+        colors = darkTextFieldColors()
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -20,6 +20,9 @@ import com.example.analizer.ui.screens.ImportScreen
 import com.example.analizer.ui.theme.AnaliZerTheme
 import com.example.analizer.ui.viewmodel.AnalyzerViewModel
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+
 sealed class Screen {
     data object Import : Screen()
     data object Data : Screen()
@@ -69,6 +72,22 @@ fun MainApp(viewModel: AnalyzerViewModel) {
     val inputUrl by viewModel.inputUrl.collectAsStateWithLifecycle()
     val targetSpreadsheetName by viewModel.targetSpreadsheetName.collectAsStateWithLifecycle()
 
+    val exportConfigLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportConfigJson(context, uri)
+        }
+    }
+
+    val importConfigLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importConfigJson(context, uri)
+        }
+    }
+
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Import) }
 
     LaunchedEffect(spreadsheetData) {
@@ -115,6 +134,9 @@ fun MainApp(viewModel: AnalyzerViewModel) {
                 columnStats = columnStats,
                 onConfigChanged = { viewModel.updateConfig(it) },
                 onRunAnalysis = { viewModel.runAnalysis() },
+                onExportConfig = { exportConfigLauncher.launch("analizer_config.json") },
+                onImportConfig = { importConfigLauncher.launch(arrayOf("application/json", "*/*")) },
+                onReloadData = { viewModel.reloadData(context) },
                 currentScreen = currentScreen,
                 onScreenSelected = { currentScreen = it }
             )
