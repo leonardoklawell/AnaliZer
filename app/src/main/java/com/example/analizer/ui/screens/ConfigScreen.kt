@@ -45,6 +45,7 @@ fun ConfigScreen(
     onExportConfig: () -> Unit = {},
     onImportConfig: () -> Unit = {},
     onReloadData: () -> Unit = {},
+    onLoadPreset: () -> Unit = {},
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
@@ -59,6 +60,9 @@ fun ConfigScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = onLoadPreset) {
+                            Icon(Icons.Rounded.DashboardCustomize, contentDescription = "Carregar Modelo Mensal", tint = Color(0xFFEBA036))
+                        }
                         IconButton(onClick = onExportConfig) {
                             Icon(Icons.Rounded.FileDownload, contentDescription = "Exportar Configurações", tint = Color(0xFFEBA036))
                         }
@@ -186,6 +190,9 @@ fun ConfigScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onLoadPreset) {
+                        Icon(Icons.Rounded.DashboardCustomize, contentDescription = "Carregar Modelo Mensal", tint = Color(0xFFEBA036))
+                    }
                     IconButton(onClick = onExportConfig) {
                         Icon(Icons.Rounded.FileDownload, contentDescription = "Exportar Configurações", tint = Color(0xFFEBA036))
                     }

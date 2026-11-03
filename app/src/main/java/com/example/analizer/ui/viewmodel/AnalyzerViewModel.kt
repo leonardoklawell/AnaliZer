@@ -488,6 +488,25 @@ class AnalyzerViewModel(
         }
     }
 
+    fun loadMonthlyLayoutPreset() {
+        val currentSheet = _spreadsheetData.value?.sheetNames?.firstOrNull() ?: ""
+        val presetConfig = com.example.analizer.model.createMonthlyLayoutPreset(currentSheet)
+        _analysisConfig.value = presetConfig
+        _spreadsheetData.value?.let { data ->
+            runAnalysisForData(data, presetConfig)
+        }
+        saveCurrentDataAndConfig()
+    }
+
+    fun setSelectedMonth(month: String) {
+        val updated = _analysisConfig.value.copy(selectedMonth = month)
+        _analysisConfig.value = updated
+        _spreadsheetData.value?.let { data ->
+            runAnalysisForData(data, updated)
+        }
+        saveCurrentDataAndConfig()
+    }
+
     fun updateConfig(config: AnalysisConfig) {
         _analysisConfig.value = config
         _spreadsheetData.value?.let { data ->

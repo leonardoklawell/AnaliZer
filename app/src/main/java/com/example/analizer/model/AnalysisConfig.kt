@@ -92,6 +92,10 @@ data class CardConfig(
     }
 )
 
+val MONTH_OPTIONS = listOf(
+    "TODOS", "JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"
+)
+
 @Serializable
 data class AnalysisConfig(
     val sheetName: String = "",
@@ -108,7 +112,8 @@ data class AnalysisConfig(
     val chartSelectedGroupIds: List<String> = emptyList(),
     val cardTitles: Map<String, String> = emptyMap(),
     val cardFieldMappings: List<CardFieldMapping> = emptyList(),
-    val cards: List<CardConfig> = emptyList()
+    val cards: List<CardConfig> = emptyList(),
+    val selectedMonth: String = "TODOS"
 ) {
     val start: Int? get() = startRow
     val end: Int? get() = endRow
@@ -159,4 +164,61 @@ data class AnalysisConfig(
             ?: intervals.find { columnIndex in it.startColumn..it.endColumn }?.metric
             ?: "Média"
     }
+}
+
+fun createMonthlyLayoutPreset(sheetName: String = ""): AnalysisConfig {
+    val group1Items = listOf(
+        DisplayGroupItem(id = "item_km", customLabel = "Km Percorrido", startColumn = 18, endColumn = 29, startRow = 2, endRow = 2, metric = "Soma"),
+        DisplayGroupItem(id = "item_kml", customLabel = "Média (KM/L)", startColumn = 18, endColumn = 29, startRow = 3, endRow = 3, metric = "Média"),
+        DisplayGroupItem(id = "item_litros", customLabel = "Total Litros", startColumn = 18, endColumn = 29, startRow = 4, endRow = 4, metric = "Soma"),
+        DisplayGroupItem(id = "item_dias", customLabel = "Dias Percorridos", startColumn = 18, endColumn = 29, startRow = 5, endRow = 5, metric = "Soma")
+    )
+    val group1 = DisplayGroup(
+        id = "group_desempenho",
+        name = "Desempenho Mensal de Rodagem",
+        nameSourceType = "TEXT",
+        items = group1Items,
+        displayOrder = 0
+    )
+
+    val group2Items = listOf(
+        DisplayGroupItem(id = "item_valortotal", customLabel = "Valor total", startColumn = 32, endColumn = 43, startRow = 2, endRow = 2, metric = "Soma"),
+        DisplayGroupItem(id = "item_precomedio", customLabel = "Preço Médio", startColumn = 32, endColumn = 43, startRow = 3, endRow = 3, metric = "Média"),
+        DisplayGroupItem(id = "item_gastokm", customLabel = "Gasto por KM", startColumn = 32, endColumn = 43, startRow = 4, endRow = 4, metric = "Média")
+    )
+    val group2 = DisplayGroup(
+        id = "group_financeiro",
+        name = "Custos e Financeiro Mensal",
+        nameSourceType = "TEXT",
+        items = group2Items,
+        displayOrder = 1
+    )
+
+    val card1 = CardConfig(
+        id = "card_desempenho",
+        groupId = "group_desempenho",
+        fieldMappings = listOf(
+            CardFieldMapping(fieldIndex = 0, titleItemReference = "Km Percorrido", valueItemReference = "item_km"),
+            CardFieldMapping(fieldIndex = 1, titleItemReference = "Média (KM/L)", valueItemReference = "item_kml"),
+            CardFieldMapping(fieldIndex = 2, titleItemReference = "Total Litros", valueItemReference = "item_litros"),
+            CardFieldMapping(fieldIndex = 3, titleItemReference = "Dias Percorridos", valueItemReference = "item_dias")
+        )
+    )
+
+    val card2 = CardConfig(
+        id = "card_financeiro",
+        groupId = "group_financeiro",
+        fieldMappings = listOf(
+            CardFieldMapping(fieldIndex = 0, titleItemReference = "Valor total", valueItemReference = "item_valortotal"),
+            CardFieldMapping(fieldIndex = 1, titleItemReference = "Preço Médio", valueItemReference = "item_precomedio"),
+            CardFieldMapping(fieldIndex = 2, titleItemReference = "Gasto por KM", valueItemReference = "item_gastokm")
+        )
+    )
+
+    return AnalysisConfig(
+        sheetName = sheetName,
+        displayGroups = listOf(group1, group2),
+        cards = listOf(card1, card2),
+        selectedMonth = "TODOS"
+    )
 }

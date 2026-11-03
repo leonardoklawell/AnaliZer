@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -42,6 +43,8 @@ fun AnalyticsScreen(
     columnStats: List<ColumnStats>,
     spreadsheetData: SpreadsheetData?,
     config: AnalysisConfig = AnalysisConfig(),
+    onMonthSelected: (String) -> Unit = {},
+    onLoadPreset: () -> Unit = {},
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit
 ) {
@@ -61,6 +64,9 @@ fun AnalyticsScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { onLoadPreset() }) {
+                        Icon(Icons.Rounded.DashboardCustomize, contentDescription = "Modelo Mensal", tint = Color(0xFFEBA036))
+                    }
                     IconButton(onClick = { onScreenSelected(Screen.Import) }) {
                         Icon(Icons.Rounded.FileUpload, contentDescription = "Importar Planilha")
                     }
@@ -194,7 +200,13 @@ fun AnalyticsScreen(
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
                         if (page == 0) {
-                            StatisticsTab(columnStats = columnStats, config = config, spreadsheetData = spreadsheetData)
+                            StatisticsTab(
+                                columnStats = columnStats,
+                                config = config,
+                                spreadsheetData = spreadsheetData,
+                                onMonthSelected = onMonthSelected,
+                                onLoadPreset = onLoadPreset
+                            )
                         } else if (columnStats.isEmpty()) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -280,7 +292,8 @@ fun getFieldValueForCardConfigField(
     card: com.example.analizer.model.CardConfig,
     allStats: List<ColumnStats>,
     displayGroups: List<com.example.analizer.model.DisplayGroup>,
-    cardTitle: String = ""
+    cardTitle: String = "",
+    selectedMonth: String = "TODOS"
 ): Pair<String, String> {
     val defaultTitle = DEFAULT_CARD_DETAIL_TITLES.getOrElse(fieldIndex) { "Campo ${fieldIndex + 1}" }
     val linkedGroup = displayGroups.find { it.id == card.groupId || it.name == card.groupId }
@@ -313,7 +326,6 @@ fun getFieldValueForCardConfigField(
     val targetItem = if (valueItemRef.isNotBlank()) {
         linkedGroup.items.find { it.id == valueItemRef || it.customLabel == valueItemRef }
     } else {
-        // Only map to group item if explicitly configured at this index
         linkedGroup.items.getOrNull(fieldIndex)
     }
 
@@ -321,31 +333,72 @@ fun getFieldValueForCardConfigField(
         return Pair(title, "--")
     }
 
-    val targetStat = groupStats.find { stat ->
-        stat.columnIndex in targetItem.startColumn..targetItem.endColumn &&
-        (targetItem.customLabel.isBlank() || stat.columnName.contains(targetItem.customLabel))
-    } ?: groupStats.find { stat ->
+    val itemStats = groupStats.filter { stat ->
         stat.columnIndex in targetItem.startColumn..targetItem.endColumn
+    }.ifEmpty {
+        groupStats.filter { stat ->
+            targetItem.customLabel.isNotBlank() && stat.columnName.contains(targetItem.customLabel)
+        }
     }
 
-    if (targetStat == null || targetStat.count <= 0) {
+    if (itemStats.isEmpty()) {
         return Pair(title, "--")
     }
 
-    val metricToUse = if (targetItem.metric.isNotBlank()) targetItem.metric else targetStat.metric
-    val value = when (metricToUse) {
-        "Soma" -> String.format(Locale.getDefault(), "%.1f", targetStat.sum)
-        "Mediana" -> String.format(Locale.getDefault(), "%.2f", targetStat.median)
-        "Mínimo" -> String.format(Locale.getDefault(), "%.1f", targetStat.min)
-        "Máximo" -> String.format(Locale.getDefault(), "%.1f", targetStat.max)
-        "Mín / Máx" -> "${String.format(Locale.getDefault(), "%.1f", targetStat.min)} / ${String.format(Locale.getDefault(), "%.1f", targetStat.max)}"
-        "Desvio Padrão" -> if (targetStat.count > 1) String.format(Locale.getDefault(), "%.2f", targetStat.stdDev) else "--"
-        "Contagem" -> "${targetStat.count}"
-        "Valor da Célula" -> targetStat.rawStringValues.firstOrNull()?.takeIf { it.isNotBlank() } ?: "--"
-        "Variância" -> String.format(Locale.getDefault(), "%.2f", targetStat.stdDev * targetStat.stdDev)
-        else -> String.format(Locale.getDefault(), "%.2f", targetStat.mean)
+    val monthList = listOf("JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ")
+
+    val relevantStats = if (selectedMonth != "TODOS" && monthList.contains(selectedMonth)) {
+        val monthIdx = monthList.indexOf(selectedMonth)
+        val monthMatch = itemStats.find {
+            it.columnName.uppercase().contains(selectedMonth) ||
+            it.sheetName.uppercase().contains(selectedMonth)
+        }
+        if (monthMatch != null) {
+            listOf(monthMatch)
+        } else {
+            val targetColIndex = targetItem.startColumn + monthIdx
+            val colMatch = itemStats.find { it.columnIndex == targetColIndex }
+            if (colMatch != null) listOf(colMatch) else listOf(itemStats.getOrElse(monthIdx % itemStats.size) { itemStats.first() })
+        }
+    } else {
+        itemStats
     }
-    return Pair(title, value)
+
+    if (relevantStats.isEmpty()) {
+        return Pair(title, "--")
+    }
+
+    val isCurrency = title.contains("Valor", ignoreCase = true) ||
+                     title.contains("Preço", ignoreCase = true) ||
+                     title.contains("Gasto", ignoreCase = true) ||
+                     title.contains("R$", ignoreCase = true)
+
+    val isMeanMetric = targetItem.metric == "Média" ||
+                       title.contains("Média", ignoreCase = true) ||
+                       title.contains("Preço", ignoreCase = true) ||
+                       title.contains("Gasto", ignoreCase = true)
+
+    val formattedValue = if (selectedMonth == "TODOS" && relevantStats.size > 1) {
+        if (isMeanMetric) {
+            val avg = relevantStats.map { it.mean }.filter { !it.isNaN() && it > 0 }.let { if (it.isNotEmpty()) it.average() else 0.0 }
+            if (isCurrency) String.format(Locale.getDefault(), "R$ %.2f", avg)
+            else String.format(Locale.getDefault(), "%.2f", avg)
+        } else {
+            val totalSum = relevantStats.sumOf { if (it.count > 0) it.sum else 0.0 }
+            if (isCurrency) String.format(Locale.getDefault(), "R$ %.2f", totalSum)
+            else if (totalSum % 1.0 == 0.0 && totalSum < 100000) String.format(Locale.getDefault(), "%.0f", totalSum)
+            else String.format(Locale.getDefault(), "%.2f", totalSum)
+        }
+    } else {
+        val stat = relevantStats.first()
+        if (stat.count <= 0) return Pair(title, "--")
+        val numVal = if (stat.metric == "Média" || isMeanMetric) stat.mean else stat.sum
+        if (isCurrency) String.format(Locale.getDefault(), "R$ %.2f", numVal)
+        else if (numVal % 1.0 == 0.0 && numVal < 100000) String.format(Locale.getDefault(), "%.0f", numVal)
+        else String.format(Locale.getDefault(), "%.2f", numVal)
+    }
+
+    return Pair(title, formattedValue)
 }
 
 @Composable
@@ -356,6 +409,7 @@ fun AnalysisStatCard(
     spreadsheetData: SpreadsheetData?,
     currentSheetName: String = "",
     cardIndex: Int = 0,
+    selectedMonth: String = "TODOS",
     modifier: Modifier = Modifier
 ) {
     val linkedGroup = displayGroups.find { it.id == cardConfig.groupId || it.name == cardConfig.groupId }
@@ -414,7 +468,7 @@ fun AnalysisStatCard(
             val visibleFieldIndices = mutableListOf(0, 1, 2, 3, 4, 5)
             for (idx in 6 until 14) {
                 val m = cardConfig.fieldMappings.find { it.fieldIndex == idx }
-                if (m != null && m.valueItemReference.isNotBlank()) {
+                if (m != null && m.valueItemReference.isNotBlank() && m.valueItemReference != "none") {
                     visibleFieldIndices.add(idx)
                 }
             }
@@ -424,9 +478,9 @@ fun AnalysisStatCard(
                 if (rowIndex > 0) {
                     Spacer(modifier = Modifier.height(18.dp))
                 }
-                val f1 = getFieldValueForCardConfigField(rowChunk[0], cardConfig, columnStats, displayGroups, cardTitle)
-                val f2 = if (rowChunk.size > 1) getFieldValueForCardConfigField(rowChunk[1], cardConfig, columnStats, displayGroups, cardTitle) else null
-                val f3 = if (rowChunk.size > 2) getFieldValueForCardConfigField(rowChunk[2], cardConfig, columnStats, displayGroups, cardTitle) else null
+                val f1 = getFieldValueForCardConfigField(rowChunk[0], cardConfig, columnStats, displayGroups, cardTitle, selectedMonth)
+                val f2 = if (rowChunk.size > 1) getFieldValueForCardConfigField(rowChunk[1], cardConfig, columnStats, displayGroups, cardTitle, selectedMonth) else null
+                val f3 = if (rowChunk.size > 2) getFieldValueForCardConfigField(rowChunk[2], cardConfig, columnStats, displayGroups, cardTitle, selectedMonth) else null
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -446,6 +500,71 @@ fun AnalysisStatCard(
                             StatDetailItem(f3.first, f3.second)
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MonthSelectorBar(
+    selectedMonth: String,
+    onMonthSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1525))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Mês em Análise",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFEBA036)
+                )
+                Text(
+                    text = if (selectedMonth == "TODOS") "Exibindo Acumulado (Todos)" else "Mês: $selectedMonth",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White
+                )
+            }
+
+            val scrollState = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(scrollState),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                com.example.analizer.model.MONTH_OPTIONS.forEach { month ->
+                    val isSelected = month == selectedMonth
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onMonthSelected(month) },
+                        label = { Text(month, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFFEBA036),
+                            selectedLabelColor = Color(0xFF0D1525),
+                            containerColor = Color(0xFF1B273B),
+                            labelColor = Color.White
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = if (isSelected) Color(0xFFEBA036) else Color(0xFF2C3E55),
+                            selectedBorderColor = Color(0xFFEBA036),
+                            enabled = true,
+                            selected = isSelected
+                        )
+                    )
                 }
             }
         }
@@ -499,7 +618,9 @@ fun MetricSummaryCard(
 fun StatisticsTab(
     columnStats: List<ColumnStats>,
     config: AnalysisConfig,
-    spreadsheetData: SpreadsheetData? = null
+    spreadsheetData: SpreadsheetData? = null,
+    onMonthSelected: (String) -> Unit = {},
+    onLoadPreset: () -> Unit = {}
 ) {
     val cards = config.effectiveCards
     val displayGroups = if (config.displayGroups.isNotEmpty()) config.displayGroups else config.effectiveDisplayGroups
@@ -511,7 +632,26 @@ fun StatisticsTab(
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 4 Metric Strip (Matching Fintech Management Dashboard Print)
+        // Month Selector Bar
+        MonthSelectorBar(
+            selectedMonth = config.selectedMonth,
+            onMonthSelected = onMonthSelected
+        )
+
+        // Preset model banner button
+        OutlinedButton(
+            onClick = onLoadPreset,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0D1525)),
+            border = BorderStroke(1.dp, Color(0xFFEBA036))
+        ) {
+            Icon(Icons.Rounded.DashboardCustomize, contentDescription = null, tint = Color(0xFFEBA036))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Carregar Modelo de Layout Mensal (Frota / Financeiro)", color = Color(0xFF0D1525), fontWeight = FontWeight.Bold)
+        }
+
+        // 4 Metric Strip
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -561,7 +701,8 @@ fun StatisticsTab(
                     displayGroups = displayGroups,
                     spreadsheetData = spreadsheetData,
                     currentSheetName = config.sheetName,
-                    cardIndex = cardIdx
+                    cardIndex = cardIdx,
+                    selectedMonth = config.selectedMonth
                 )
             }
         }

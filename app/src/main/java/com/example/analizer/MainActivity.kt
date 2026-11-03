@@ -137,6 +137,7 @@ fun MainApp(viewModel: AnalyzerViewModel) {
                 onExportConfig = { exportConfigLauncher.launch("analizer_config.json") },
                 onImportConfig = { importConfigLauncher.launch(arrayOf("application/json", "*/*")) },
                 onReloadData = { viewModel.reloadData(context) },
+                onLoadPreset = { viewModel.loadMonthlyLayoutPreset() },
                 currentScreen = currentScreen,
                 onScreenSelected = { currentScreen = it }
             )
@@ -146,6 +147,8 @@ fun MainApp(viewModel: AnalyzerViewModel) {
                 columnStats = columnStats,
                 spreadsheetData = spreadsheetData,
                 config = analysisConfig,
+                onMonthSelected = { viewModel.setSelectedMonth(it) },
+                onLoadPreset = { viewModel.loadMonthlyLayoutPreset() },
                 currentScreen = currentScreen,
                 onScreenSelected = { currentScreen = it }
             )

@@ -1,0 +1,161 @@
+{
+  "sheetName": "",
+  "selectedFolder": "",
+  "headerRowIndex": 0,
+  "customColumnTitles": {},
+  "selectedColumnIndices": [],
+  "columnMetrics": {},
+  "selectedMetrics": {},
+  "startRow": null,
+  "endRow": null,
+  "intervals": [],
+  "displayGroups": [
+    {
+      "id": "group_desempenho",
+      "name": "Desempenho Mensal de Rodagem",
+      "nameSourceType": "TEXT",
+      "cellReference": "A1",
+      "selectedSheets": [],
+      "selectedFolder": "",
+      "items": [
+        {
+          "id": "item_km",
+          "startColumn": 18,
+          "endColumn": 29,
+          "startRow": 2,
+          "endRow": 2,
+          "metric": "Soma",
+          "customLabel": "Km Percorrido"
+        },
+        {
+          "id": "item_kml",
+          "startColumn": 18,
+          "endColumn": 29,
+          "startRow": 3,
+          "endRow": 3,
+          "metric": "Média",
+          "customLabel": "Média (KM/L)"
+        },
+        {
+          "id": "item_litros",
+          "startColumn": 18,
+          "endColumn": 29,
+          "startRow": 4,
+          "endRow": 4,
+          "metric": "Soma",
+          "customLabel": "Total Litros"
+        },
+        {
+          "id": "item_dias",
+          "startColumn": 18,
+          "endColumn": 29,
+          "startRow": 5,
+          "endRow": 5,
+          "metric": "Soma",
+          "customLabel": "Dias Percorridos"
+        }
+      ],
+      "enabledForAnalysis": true,
+      "displayOrder": 0
+    },
+    {
+      "id": "group_financeiro",
+      "name": "Custos e Financeiro Mensal",
+      "nameSourceType": "TEXT",
+      "cellReference": "A1",
+      "selectedSheets": [],
+      "selectedFolder": "",
+      "items": [
+        {
+          "id": "item_valortotal",
+          "startColumn": 32,
+          "endColumn": 43,
+          "startRow": 2,
+          "endRow": 2,
+          "metric": "Soma",
+          "customLabel": "Valor total"
+        },
+        {
+          "id": "item_precomedio",
+          "startColumn": 32,
+          "endColumn": 43,
+          "startRow": 3,
+          "endRow": 3,
+          "metric": "Média",
+          "customLabel": "Preço Médio"
+        },
+        {
+          "id": "item_gastokm",
+          "startColumn": 32,
+          "endColumn": 43,
+          "startRow": 4,
+          "endRow": 4,
+          "metric": "Média",
+          "customLabel": "Gasto por KM"
+        }
+      ],
+      "enabledForAnalysis": true,
+      "displayOrder": 1
+    }
+  ],
+  "chartSelectedGroupIds": [],
+  "cardTitles": {},
+  "cardFieldMappings": [],
+  "cards": [
+    {
+      "id": "card_desempenho",
+      "groupId": "group_desempenho",
+      "fieldMappings": [
+        {
+          "id": "m1",
+          "fieldIndex": 0,
+          "titleItemReference": "Km Percorrido",
+          "valueItemReference": "item_km"
+        },
+        {
+          "id": "m2",
+          "fieldIndex": 1,
+          "titleItemReference": "Média (KM/L)",
+          "valueItemReference": "item_kml"
+        },
+        {
+          "id": "m3",
+          "fieldIndex": 2,
+          "titleItemReference": "Total Litros",
+          "valueItemReference": "item_litros"
+        },
+        {
+          "id": "m4",
+          "fieldIndex": 3,
+          "titleItemReference": "Dias Percorridos",
+          "valueItemReference": "item_dias"
+        }
+      ]
+    },
+    {
+      "id": "card_financeiro",
+      "groupId": "group_financeiro",
+      "fieldMappings": [
+        {
+          "id": "m5",
+          "fieldIndex": 0,
+          "titleItemReference": "Valor total",
+          "valueItemReference": "item_valortotal"
+        },
+        {
+          "id": "m6",
+          "fieldIndex": 1,
+          "titleItemReference": "Preço Médio",
+          "valueItemReference": "item_precomedio"
+        },
+        {
+          "id": "m7",
+          "fieldIndex": 2,
+          "titleItemReference": "Gasto por KM",
+          "valueItemReference": "item_gastokm"
+        }
+      ]
+    }
+  ],
+  "selectedMonth": "TODOS"
+}
