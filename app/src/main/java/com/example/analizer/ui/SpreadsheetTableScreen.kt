@@ -1,5 +1,8 @@
 package com.example.analizer.ui
 
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -333,9 +336,8 @@ fun SpreadsheetTableScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val maxDisplayRows = 100
                     Text(
-                        text = if (rows.size > maxDisplayRows) "Linhas: ${rows.size} (exibindo primeiras $maxDisplayRows)" else "Total de linhas: ${rows.size}",
+                        text = "Total de linhas: ${rows.size} (virtualizadas)",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF333333)
                     )
@@ -346,7 +348,7 @@ fun SpreadsheetTableScreen(
                     )
                 }
 
-                // Scrollable Spreadsheet Table
+                // Scrollable Virtualized Spreadsheet Table
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -357,20 +359,21 @@ fun SpreadsheetTableScreen(
                     )
                 ) {
                     val horizontalScrollState = rememberScrollState()
-                    val verticalScrollState = rememberScrollState()
-                    val displayRows = rows.take(100)
 
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .horizontalScroll(horizontalScrollState)
-                            .verticalScroll(verticalScrollState)
                             .padding(8.dp)
                     ) {
-                        Column(
+                        LazyColumn(
+                            modifier = Modifier.fillMaxHeight(),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            displayRows.forEachIndexed { rowIndex, row ->
+                            itemsIndexed(
+                                items = rows,
+                                key = { index, _ -> index }
+                            ) { rowIndex, row ->
                                 val isHeader = rowIndex == config.headerRowIndex
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
