@@ -284,6 +284,12 @@ fun resolveGroupName(
     }
 }
 
+data class ResolvedCardItem(
+    val label: String,
+    val value: String,
+    val enabled: Boolean
+)
+
 fun resolveCardFieldValue(
     fieldIndex: Int,
     cardConfig: com.example.analizer.model.CardConfig,
@@ -292,10 +298,15 @@ fun resolveCardFieldValue(
     spreadsheetData: SpreadsheetData?,
     selectedMonth: String = "TODOS",
     monthOptions: List<com.example.analizer.model.MonthSelectorOption> = emptyList()
-): Pair<String, String> {
+): ResolvedCardItem {
     val defaultLabel = "ITEM ${fieldIndex + 1}"
     val mapping = cardConfig.fieldMappings.find { it.fieldIndex == fieldIndex }
-    val label = mapping?.titleItemReference?.ifBlank { defaultLabel } ?: defaultLabel
+    val isEnabled = mapping?.enabled ?: true
+    if (!isEnabled) {
+        return ResolvedCardItem(label = "", value = "", enabled = false)
+    }
+
+    var titleRef = mapping?.titleItemReference.orEmpty().trim()
     var cellRef = mapping?.valueItemReference.orEmpty().trim()
 
     val linkedGroup = displayGroups.find { it.id == cardConfig.groupId }
@@ -308,22 +319,42 @@ fun resolveCardFieldValue(
         spreadsheetData?.sheets?.get(sheetName) ?: emptyList()
     }
 
-    if (cellRef.isBlank()) {
-        return Pair(label, "--")
-    }
-
-    // Shift cell reference according to month/period selector if checked for this card
+    // Shift cell references according to month/period selector if checked for this card
     if (cardConfig.obeyMonthSelector && !selectedMonth.equals("TODOS", ignoreCase = true)) {
         val selectedOpt = monthOptions.find { it.name.equals(selectedMonth, ignoreCase = true) }
         val offset = selectedOpt?.columnOffset ?: 0
         if (offset != 0) {
-            cellRef = com.example.analizer.domain.StatisticsEngine().shiftCellReference(cellRef, offset)
+            if (cellRef.isNotBlank()) {
+                cellRef = com.example.analizer.domain.StatisticsEngine().shiftCellReference(cellRef, offset)
+            }
+            if (titleRef.isNotBlank() && com.example.analizer.domain.StatisticsEngine().parseCellReference(titleRef) != null) {
+                titleRef = com.example.analizer.domain.StatisticsEngine().shiftCellReference(titleRef, offset)
+            }
         }
     }
 
-    val resolvedText = com.example.analizer.domain.StatisticsEngine().resolveCellText(sheetRows, cellRef)
-    val value = resolvedText ?: cellRef.ifBlank { "--" }
-    return Pair(label, value)
+    // Resolve cell reference for title reference if it matches cell format (e.g. A1, S3)
+    val resolvedTitleText = if (titleRef.isNotBlank()) {
+        com.example.analizer.domain.StatisticsEngine().resolveCellText(sheetRows, titleRef)
+    } else null
+    val label = resolvedTitleText ?: titleRef.ifBlank { defaultLabel }
+
+    // Resolve cell reference for value reference
+    val rawValue = if (cellRef.isNotBlank()) {
+        com.example.analizer.domain.StatisticsEngine().resolveCellText(sheetRows, cellRef) ?: cellRef
+    } else if (resolvedTitleText != null) {
+        resolvedTitleText
+    } else {
+        "--"
+    }
+
+    val formattedValue = com.example.analizer.model.formatFieldValue(
+        rawValue,
+        mapping?.numberFormat ?: "AUTO",
+        mapping?.thousandsSeparator ?: true
+    )
+
+    return ResolvedCardItem(label = label, value = formattedValue, enabled = true)
 }
 
 @Composable
@@ -364,32 +395,41 @@ fun AnalysisStatCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = if (item1.second != "--") item1.second else item1.first,
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (item2.second != "--") item2.second else item2.first,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEBA036)
-                    )
+                    if (item1.enabled) {
+                        val text1 = if (item1.value != "--" && item1.value.isNotBlank()) item1.value else item1.label
+                        Text(
+                            text = text1,
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    if (item2.enabled) {
+                        val text2 = if (item2.value != "--" && item2.value.isNotBlank()) item2.value else item2.label
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = text2,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFEBA036)
+                        )
+                    }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFEBA036)
-                ) {
-                    Text(
-                        text = if (item3.second != "--") item3.second else item3.first,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0D1525)
-                    )
+                if (item3.enabled) {
+                    val text3 = if (item3.value != "--" && item3.value.isNotBlank()) item3.value else item3.label
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFFEBA036)
+                    ) {
+                        Text(
+                            text = text3,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0D1525)
+                        )
+                    }
                 }
             }
 
@@ -418,6 +458,9 @@ fun AnalysisStatCard(
             val col4Bottom = resolvedValues[17]
             val col4BottomVal = resolvedValues[18]
 
+            fun getLabel(item: ResolvedCardItem): String = if (item.enabled) (if (item.value != "--" && item.value.isNotBlank()) item.value else item.label) else ""
+            fun getValue(item: ResolvedCardItem): String = if (item.enabled) (if (item.value != "--" && item.value.isNotBlank()) item.value else item.label) else ""
+
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -427,16 +470,16 @@ fun AnalysisStatCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(col1Top.first, col1TopVal.second.ifBlank { col1TopVal.first })
+                        StatDetailItem(getLabel(col1Top), getValue(col1TopVal))
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(col2Top.first, col2TopVal.second.ifBlank { col2TopVal.first })
+                        StatDetailItem(getLabel(col2Top), getValue(col2TopVal))
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(col3Top.first, col3TopVal.second.ifBlank { col3TopVal.first })
+                        StatDetailItem(getLabel(col3Top), getValue(col3TopVal))
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(col4Top.first, col4TopVal.second.ifBlank { col4TopVal.first })
+                        StatDetailItem(getLabel(col4Top), getValue(col4TopVal))
                     }
                 }
 
@@ -446,16 +489,16 @@ fun AnalysisStatCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(col1Bottom.first, col1BottomVal.second.ifBlank { col1BottomVal.first })
+                        StatDetailItem(getLabel(col1Bottom), getValue(col1BottomVal))
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(col2Bottom.first, col2BottomVal.second.ifBlank { col2BottomVal.first })
+                        StatDetailItem(getLabel(col2Bottom), getValue(col2BottomVal))
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(col3Bottom.first, col3BottomVal.second.ifBlank { col3BottomVal.first })
+                        StatDetailItem(getLabel(col3Bottom), getValue(col3BottomVal))
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(col4Bottom.first, col4BottomVal.second.ifBlank { col4BottomVal.first })
+                        StatDetailItem(getLabel(col4Bottom), getValue(col4BottomVal))
                     }
                 }
             }
@@ -602,13 +645,20 @@ fun StatisticsTab(
     var sortAscending by remember(config.sortAscending) { mutableStateOf(config.sortAscending) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
+    var selectedGroupIdFilter by remember { mutableStateOf<String?>(null) }
+    var selectedItemIndexFilter by remember { mutableStateOf<Int?>(null) }
+    var groupFilterExpanded by remember { mutableStateOf(false) }
+    var itemFilterExpanded by remember { mutableStateOf(false) }
+
     val sortedCards = remember(cards, sortFieldIndex, sortAscending, config.selectedMonth, config.monthOptions) {
         if (sortFieldIndex == null) cards
         else {
             val idx = sortFieldIndex!!
             cards.sortedWith(Comparator { c1, c2 ->
-                val str1 = resolveCardFieldValue(idx, c1, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions).second
-                val str2 = resolveCardFieldValue(idx, c2, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions).second
+                val itemRes1 = resolveCardFieldValue(idx, c1, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
+                val itemRes2 = resolveCardFieldValue(idx, c2, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
+                val str1 = if (itemRes1.value != "--" && itemRes1.value.isNotBlank()) itemRes1.value else itemRes1.label
+                val str2 = if (itemRes2.value != "--" && itemRes2.value.isNotBlank()) itemRes2.value else itemRes2.label
 
                 val clean1 = str1.replace("R$", "").replace(".", "").replace(",", ".").trim()
                 val clean2 = str2.replace("R$", "").replace(".", "").replace(",", ".").trim()
@@ -626,9 +676,134 @@ fun StatisticsTab(
         }
     }
 
+    val filteredCards = remember(sortedCards, selectedGroupIdFilter, selectedItemIndexFilter) {
+        sortedCards.filter { card ->
+            val matchGroup = selectedGroupIdFilter == null || card.groupId == selectedGroupIdFilter
+            val matchItem = selectedItemIndexFilter == null || cards.indexOf(card) == selectedItemIndexFilter
+            matchGroup && matchItem
+        }
+    }
+
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Filter Bar (Grupo / Pasta & Cards)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1825))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Dropdown 1: Filtrar por Grupo
+                Box(modifier = Modifier.weight(1f)) {
+                    val currentGroupLabel = displayGroups.find { it.id == selectedGroupIdFilter }?.name?.ifBlank { displayGroups.find { it.id == selectedGroupIdFilter }?.selectedFolder } ?: "Todos os Grupos"
+                    ExposedDropdownMenuBox(
+                        expanded = groupFilterExpanded,
+                        onExpandedChange = { groupFilterExpanded = !groupFilterExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = currentGroupLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Filtrar Grupo (Pasta)", fontSize = 10.sp) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupFilterExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp, color = Color.White),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFEBA036), unfocusedBorderColor = Color(0xFF4A5D78),
+                                focusedContainerColor = Color(0xFF02121C), unfocusedContainerColor = Color(0xFF02121C),
+                                focusedLabelColor = Color(0xFFEBA036), unfocusedLabelColor = Color(0xFFB0BEC5)
+                            )
+                        )
+                        ExposedDropdownMenu(
+                            expanded = groupFilterExpanded,
+                            onDismissRequest = { groupFilterExpanded = false },
+                            modifier = Modifier.background(Color(0xFF02121C))
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Todos os Grupos", color = Color.White) },
+                                onClick = {
+                                    selectedGroupIdFilter = null
+                                    groupFilterExpanded = false
+                                }
+                            )
+                            displayGroups.forEach { grp ->
+                                val label = grp.name.ifBlank { grp.selectedFolder.ifBlank { "Grupo" } }
+                                DropdownMenuItem(
+                                    text = { Text(label, color = Color.White) },
+                                    onClick = {
+                                        selectedGroupIdFilter = grp.id
+                                        groupFilterExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Dropdown 2: Filtrar por Card
+                Box(modifier = Modifier.weight(1f)) {
+                    val currentCardLabel = if (selectedItemIndexFilter == null) "Todos os Cards" else "Card ${selectedItemIndexFilter!! + 1}"
+                    ExposedDropdownMenuBox(
+                        expanded = itemFilterExpanded,
+                        onExpandedChange = { itemFilterExpanded = !itemFilterExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = currentCardLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Filtrar Card", fontSize = 10.sp) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = itemFilterExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp, color = Color.White),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFEBA036), unfocusedBorderColor = Color(0xFF4A5D78),
+                                focusedContainerColor = Color(0xFF02121C), unfocusedContainerColor = Color(0xFF02121C),
+                                focusedLabelColor = Color(0xFFEBA036), unfocusedLabelColor = Color(0xFFB0BEC5)
+                            )
+                        )
+                        ExposedDropdownMenu(
+                            expanded = itemFilterExpanded,
+                            onDismissRequest = { itemFilterExpanded = false },
+                            modifier = Modifier.background(Color(0xFF02121C))
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Todos os Cards", color = Color.White) },
+                                onClick = {
+                                    selectedItemIndexFilter = null
+                                    itemFilterExpanded = false
+                                }
+                            )
+                            cards.forEachIndexed { idx, _ ->
+                                DropdownMenuItem(
+                                    text = { Text("Card ${idx + 1}", color = Color.White) },
+                                    onClick = {
+                                        selectedItemIndexFilter = idx
+                                        itemFilterExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // Month Selector Bar
         MonthSelectorBar(
             selectedMonth = config.selectedMonth,
@@ -643,18 +818,31 @@ fun StatisticsTab(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 enabledMetrics.forEachIndexed { index, metric ->
-                    val valText = when (metric.metricType.uppercase()) {
-                        "LINHAS" -> if (totalRows > 0) "$totalRows" else "--"
-                        "COLUNAS" -> if (totalCols > 0) "$totalCols" else "--"
-                        "GRUPOS" -> if (activeGroups > 0) "$activeGroups" else "--"
-                        "CARDS" -> if (totalCards > 0) "$totalCards" else "--"
-                        else -> "--"
+                    val valText = if (metric.valueSourceType == "CELL") {
+                        val sName = metric.sheetName.ifBlank { config.sheetName }
+                        val sheetRows = if (config.selectedFolder.isNotBlank()) {
+                            spreadsheetData?.getRows(config.selectedFolder, sName) ?: (spreadsheetData?.sheets?.get(sName) ?: emptyList())
+                        } else {
+                            spreadsheetData?.sheets?.get(sName) ?: emptyList()
+                        }
+                        val rawText = if (metric.cellReference.isNotBlank()) {
+                            com.example.analizer.domain.StatisticsEngine().resolveCellText(sheetRows, metric.cellReference) ?: metric.cellReference
+                        } else "--"
+                        com.example.analizer.model.formatFieldValue(rawText, metric.numberFormat, metric.thousandsSeparator)
+                    } else {
+                        when (metric.metricType.uppercase()) {
+                            "LINHAS" -> if (totalRows > 0) "$totalRows" else "--"
+                            "COLUNAS" -> if (totalCols > 0) "$totalCols" else "--"
+                            "GRUPOS" -> if (activeGroups > 0) "$activeGroups" else "--"
+                            "CARDS" -> if (totalCards > 0) "$totalCards" else "--"
+                            else -> "--"
+                        }
                     }
                     val colors = listOf(Color(0xFFEBA036), Color(0xFFE07A5F), Color(0xFF0D1525), Color(0xFFD4A373))
                     val accentColor = colors[index % colors.size]
 
                     MetricSummaryCard(
-                        label = metric.label.ifBlank { metric.metricType.lowercase().replaceFirstChar { it.uppercase() } },
+                        label = metric.label.ifBlank { if (metric.valueSourceType == "CELL") "Célula ${metric.cellReference}" else metric.metricType.lowercase().replaceFirstChar { it.uppercase() } },
                         value = valText,
                         accentColor = accentColor,
                         modifier = Modifier.weight(1f)
@@ -670,7 +858,7 @@ fun StatisticsTab(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Cards de Análise (${sortedCards.size})",
+                text = "Cards de Análise (${filteredCards.size})",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0D1525)
@@ -754,7 +942,7 @@ fun StatisticsTab(
             }
         }
 
-        if (sortedCards.isEmpty()) {
+        if (filteredCards.isEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
@@ -762,11 +950,11 @@ fun StatisticsTab(
                 border = BorderStroke(1.dp, Color(0xFF1E283E))
             ) {
                 Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text("Nenhum card configurado.", color = Color(0xFF94A3B8))
+                    Text("Nenhum card configurado ou visível para os filtros selecionados.", color = Color(0xFF94A3B8))
                 }
             }
         } else {
-            sortedCards.forEachIndexed { cardIdx, cardConfig ->
+            filteredCards.forEachIndexed { cardIdx, cardConfig ->
                 AnalysisStatCard(
                     cardConfig = cardConfig,
                     columnStats = columnStats,

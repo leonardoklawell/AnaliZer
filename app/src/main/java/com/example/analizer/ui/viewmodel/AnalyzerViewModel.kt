@@ -463,7 +463,16 @@ class AnalyzerViewModel(
 
     fun reloadData(context: Context) {
         val currentConfig = _analysisConfig.value
-        val source = lastImportSource
+        var source = lastImportSource
+        if (source == null && _inputUrl.value.isNotBlank()) {
+            source = ImportSource.GoogleSheet(_inputUrl.value.trim(), _targetSpreadsheetName.value)
+            lastImportSource = source
+        }
+        if (source == null && (_spreadsheetData.value?.folders?.isNotEmpty() == true)) {
+            source = ImportSource.SampleFolders
+            lastImportSource = source
+        }
+
         if (source == null) {
             _spreadsheetData.value?.let { data ->
                 runAnalysisForData(data, currentConfig)

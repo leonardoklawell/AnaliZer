@@ -359,6 +359,7 @@ fun SpreadsheetTableScreen(
                     )
                 ) {
                     val horizontalScrollState = rememberScrollState()
+                    val maxCols = remember(rows) { rows.maxOfOrNull { it.size } ?: 0 }
 
                     Box(
                         modifier = Modifier
@@ -370,6 +371,48 @@ fun SpreadsheetTableScreen(
                             modifier = Modifier.fillMaxHeight(),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
+                            // Column Letters Header Row (A, B, C...)
+                            item {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    // Corner header cell
+                                    Surface(
+                                        modifier = Modifier.width(44.dp).height(32.dp),
+                                        color = Color(0xFF0D1525),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = "#",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                    (0 until maxCols).forEach { colIdx ->
+                                        Surface(
+                                            modifier = Modifier.width(130.dp).height(32.dp),
+                                            color = Color(0xFF0D1525),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.padding(horizontal = 8.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = getColumnLetter(colIdx),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFFEBA036)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             itemsIndexed(
                                 items = rows,
                                 key = { index, _ -> index }
@@ -378,7 +421,7 @@ fun SpreadsheetTableScreen(
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    // Row number indicator
+                                    // Row number indicator (1-based Excel row number)
                                     Surface(
                                         modifier = Modifier.width(44.dp).height(36.dp),
                                         color = if (isHeader) MaterialTheme.colorScheme.primaryContainer
@@ -387,7 +430,7 @@ fun SpreadsheetTableScreen(
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Text(
-                                                text = if (isHeader) "H" else rowIndex.toString(),
+                                                text = "${rowIndex + 1}",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (isHeader) MaterialTheme.colorScheme.onPrimaryContainer
@@ -467,4 +510,15 @@ fun SpreadsheetTableScreen(
             }
         }
     }
+}
+
+fun getColumnLetter(colIndex: Int): String {
+    var index = colIndex
+    var result = ""
+    while (index >= 0) {
+        val remainder = index % 26
+        result = (('A'.code + remainder).toChar()) + result
+        index = (index / 26) - 1
+    }
+    return result
 }

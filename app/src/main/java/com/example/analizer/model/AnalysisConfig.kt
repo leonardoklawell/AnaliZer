@@ -61,18 +61,49 @@ data class CardFieldMapping(
     val id: String = UUID.randomUUID().toString(),
     val fieldIndex: Int = 0,
     val titleItemReference: String = "",
-    val valueItemReference: String = "" // Cell reference (e.g. A1, S3) or direct text
+    val valueItemReference: String = "", // Cell reference (e.g. A1, S3) or direct text
+    val enabled: Boolean = true,
+    val numberFormat: String = "AUTO", // "AUTO", "CURRENCY", "INTEGER", "DECIMAL", "PERCENT"
+    val thousandsSeparator: Boolean = true
 )
+
+fun formatFieldValue(valueStr: String, numberFormat: String, thousandsSeparator: Boolean): String {
+    if (valueStr.isBlank() || valueStr == "--" || numberFormat == "AUTO") return valueStr
+    val cleanStr = valueStr.replace("R$", "")
+        .replace("%", "")
+        .trim()
+        .replace(".", "")
+        .replace(",", ".")
+    val doubleVal = cleanStr.toDoubleOrNull() ?: return valueStr
+
+    val formatted = when (numberFormat) {
+        "CURRENCY" -> {
+            val num = String.format(java.util.Locale("pt", "BR"), "%,.2f", doubleVal)
+            "R$ $num"
+        }
+        "INTEGER" -> String.format(java.util.Locale("pt", "BR"), "%,d", doubleVal.toLong())
+        "DECIMAL" -> String.format(java.util.Locale("pt", "BR"), "%,.2f", doubleVal)
+        "PERCENT" -> {
+            val num = String.format(java.util.Locale("pt", "BR"), "%,.1f", doubleVal * 100)
+            "$num%"
+        }
+        else -> valueStr
+    }
+    return if (!thousandsSeparator) {
+        formatted.replace(".", "")
+    } else formatted
+}
 
 @Serializable
 data class MonthSelectorOption(
     val id: String = UUID.randomUUID().toString(),
     val name: String = "",
-    val columnOffset: Int = 0
+    val columnOffset: Int = 0,
+    val isDefault: Boolean = false
 )
 
 val DEFAULT_MONTH_OPTIONS = listOf(
-    MonthSelectorOption(id = "opt_todos", name = "TODOS", columnOffset = 0),
+    MonthSelectorOption(id = "opt_todos", name = "TODOS", columnOffset = 0, isDefault = true),
     MonthSelectorOption(id = "opt_jan", name = "JAN", columnOffset = 0),
     MonthSelectorOption(id = "opt_fev", name = "FEV", columnOffset = 1),
     MonthSelectorOption(id = "opt_mar", name = "MAR", columnOffset = 2),
@@ -110,15 +141,29 @@ data class CardConfig(
 data class SummaryMetricConfig(
     val id: String = UUID.randomUUID().toString(),
     val label: String = "",
-    val metricType: String = "LINHAS", // "LINHAS", "COLUNAS", "GRUPOS", "CARDS"
+    val metricType: String = "LINHAS", // "LINHAS", "COLUNAS", "GRUPOS", "CARDS", "CELL"
+    val valueSourceType: String = "METRIC", // "METRIC", "CELL"
+    val cellReference: String = "",
+    val sheetName: String = "",
+    val numberFormat: String = "AUTO",
+    val thousandsSeparator: Boolean = true,
     val enabled: Boolean = true
 )
 
 val DEFAULT_SUMMARY_METRICS = listOf(
-    SummaryMetricConfig(id = "sm_linhas", label = "Linhas", metricType = "LINHAS", enabled = true),
-    SummaryMetricConfig(id = "sm_colunas", label = "Colunas", metricType = "COLUNAS", enabled = true),
-    SummaryMetricConfig(id = "sm_grupos", label = "Grupos", metricType = "GRUPOS", enabled = true),
-    SummaryMetricConfig(id = "sm_cards", label = "Cards", metricType = "CARDS", enabled = true)
+    SummaryMetricConfig(id = "sm_linhas", label = "Linhas", metricType = "LINHAS", valueSourceType = "METRIC", enabled = true),
+    SummaryMetricConfig(id = "sm_colunas", label = "Colunas", metricType = "COLUNAS", valueSourceType = "METRIC", enabled = true),
+    SummaryMetricConfig(id = "sm_grupos", label = "Grupos", metricType = "GRUPOS", valueSourceType = "METRIC", enabled = true),
+    SummaryMetricConfig(id = "sm_cards", label = "Cards", metricType = "CARDS", valueSourceType = "METRIC", enabled = true)
+)
+
+@Serializable
+data class GroupProfile(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val displayGroups: List<DisplayGroup> = emptyList(),
+    val cards: List<CardConfig> = emptyList()
 )
 
 @Serializable
@@ -141,6 +186,11 @@ data class AnalysisConfig(
     val selectedMonth: String = "TODOS",
     val monthOptions: List<MonthSelectorOption> = DEFAULT_MONTH_OPTIONS,
     val summaryMetrics: List<SummaryMetricConfig> = DEFAULT_SUMMARY_METRICS,
+    val savedProfiles: List<GroupProfile> = emptyList(),
+    val barChartTitle: String = "Gráfico de Barras (Médias por Coluna)",
+    val barChartColor: String = "GOLD", // "GOLD", "NAVY", "CORAL", "EMERALD", "PURPLE"
+    val lineChartTitle: String = "Gráfico de Linhas (Tendência de Médias)",
+    val lineChartColor: String = "NAVY",
     val sortFieldIndex: Int? = null,
     val sortAscending: Boolean = true
 ) {
