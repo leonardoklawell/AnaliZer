@@ -41,6 +41,10 @@ class MainActivity : ComponentActivity() {
             android.util.Log.e("AnaliZer", "Fatal uncaught exception on thread ${thread.name}", throwable)
             previousHandler?.uncaughtException(thread, throwable)
         }
+        window.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+        )
         enableEdgeToEdge()
         setContent {
             AnaliZerTheme {
