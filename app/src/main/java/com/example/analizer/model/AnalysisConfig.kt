@@ -54,46 +54,71 @@ data class DisplayGroup(
     val displayOrder: Int = 0
 )
 
-val DEFAULT_CARD_FIELD_NAMES = listOf(
-    "Média",
-    "Mediana",
-    "Desv. Padrão",
-    "Mín / Máx",
-    "Soma",
-    "Contagem",
-    "Campo 7",
-    "Campo 8",
-    "Campo 9",
-    "Campo 10",
-    "Campo 11",
-    "Campo 12",
-    "Campo 13",
-    "Campo 14"
-)
+val DEFAULT_CARD_FIELD_NAMES = (1..19).map { "ITEM $it" }
 
 @Serializable
 data class CardFieldMapping(
     val id: String = UUID.randomUUID().toString(),
     val fieldIndex: Int = 0,
     val titleItemReference: String = "",
-    val valueItemReference: String = "none" // Default unconfigured ("--")
+    val valueItemReference: String = "" // Cell reference (e.g. A1, S3) or direct text
+)
+
+@Serializable
+data class MonthSelectorOption(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "",
+    val columnOffset: Int = 0
+)
+
+val DEFAULT_MONTH_OPTIONS = listOf(
+    MonthSelectorOption(id = "opt_todos", name = "TODOS", columnOffset = 0),
+    MonthSelectorOption(id = "opt_jan", name = "JAN", columnOffset = 0),
+    MonthSelectorOption(id = "opt_fev", name = "FEV", columnOffset = 1),
+    MonthSelectorOption(id = "opt_mar", name = "MAR", columnOffset = 2),
+    MonthSelectorOption(id = "opt_abr", name = "ABR", columnOffset = 3),
+    MonthSelectorOption(id = "opt_mai", name = "MAI", columnOffset = 4),
+    MonthSelectorOption(id = "opt_jun", name = "JUN", columnOffset = 5),
+    MonthSelectorOption(id = "opt_jul", name = "JUL", columnOffset = 6),
+    MonthSelectorOption(id = "opt_ago", name = "AGO", columnOffset = 7),
+    MonthSelectorOption(id = "opt_set", name = "SET", columnOffset = 8),
+    MonthSelectorOption(id = "opt_out", name = "OUT", columnOffset = 9),
+    MonthSelectorOption(id = "opt_nov", name = "NOV", columnOffset = 10),
+    MonthSelectorOption(id = "opt_dez", name = "DEZ", columnOffset = 11)
+)
+
+val MONTH_OPTIONS = listOf(
+    "TODOS", "JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"
 )
 
 @Serializable
 data class CardConfig(
     val id: String = UUID.randomUUID().toString(),
     val groupId: String = "",
-    val fieldMappings: List<CardFieldMapping> = (0 until 14).map { idx ->
+    val selectedSheet: String = "",
+    val obeyMonthSelector: Boolean = true,
+    val fieldMappings: List<CardFieldMapping> = (0 until 19).map { idx ->
         CardFieldMapping(
             fieldIndex = idx,
-            titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "Campo ${idx + 1}" },
-            valueItemReference = "none"
+            titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "ITEM ${idx + 1}" },
+            valueItemReference = ""
         )
     }
 )
 
-val MONTH_OPTIONS = listOf(
-    "TODOS", "JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"
+@Serializable
+data class SummaryMetricConfig(
+    val id: String = UUID.randomUUID().toString(),
+    val label: String = "",
+    val metricType: String = "LINHAS", // "LINHAS", "COLUNAS", "GRUPOS", "CARDS"
+    val enabled: Boolean = true
+)
+
+val DEFAULT_SUMMARY_METRICS = listOf(
+    SummaryMetricConfig(id = "sm_linhas", label = "Linhas", metricType = "LINHAS", enabled = true),
+    SummaryMetricConfig(id = "sm_colunas", label = "Colunas", metricType = "COLUNAS", enabled = true),
+    SummaryMetricConfig(id = "sm_grupos", label = "Grupos", metricType = "GRUPOS", enabled = true),
+    SummaryMetricConfig(id = "sm_cards", label = "Cards", metricType = "CARDS", enabled = true)
 )
 
 @Serializable
@@ -113,7 +138,11 @@ data class AnalysisConfig(
     val cardTitles: Map<String, String> = emptyMap(),
     val cardFieldMappings: List<CardFieldMapping> = emptyList(),
     val cards: List<CardConfig> = emptyList(),
-    val selectedMonth: String = "TODOS"
+    val selectedMonth: String = "TODOS",
+    val monthOptions: List<MonthSelectorOption> = DEFAULT_MONTH_OPTIONS,
+    val summaryMetrics: List<SummaryMetricConfig> = DEFAULT_SUMMARY_METRICS,
+    val sortFieldIndex: Int? = null,
+    val sortAscending: Boolean = true
 ) {
     val start: Int? get() = startRow
     val end: Int? get() = endRow
@@ -130,11 +159,12 @@ data class AnalysisConfig(
                 CardConfig(
                     id = "card_${grp.id}",
                     groupId = grp.id,
-                    fieldMappings = (0 until 14).map { idx ->
+                    selectedSheet = grp.selectedSheets.firstOrNull() ?: "",
+                    fieldMappings = (0 until 19).map { idx ->
                         CardFieldMapping(
                             fieldIndex = idx,
-                            titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "Campo ${idx + 1}" },
-                            valueItemReference = "none"
+                            titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "ITEM ${idx + 1}" },
+                            valueItemReference = ""
                         )
                     }
                 )
@@ -144,11 +174,12 @@ data class AnalysisConfig(
             CardConfig(
                 id = "card_default",
                 groupId = "",
-                fieldMappings = (0 until 14).map { idx ->
+                selectedSheet = "",
+                fieldMappings = (0 until 19).map { idx ->
                     CardFieldMapping(
                         fieldIndex = idx,
-                        titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "Campo ${idx + 1}" },
-                        valueItemReference = "none"
+                        titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "ITEM ${idx + 1}" },
+                        valueItemReference = ""
                     )
                 }
             )
@@ -166,59 +197,4 @@ data class AnalysisConfig(
     }
 }
 
-fun createMonthlyLayoutPreset(sheetName: String = ""): AnalysisConfig {
-    val group1Items = listOf(
-        DisplayGroupItem(id = "item_km", customLabel = "Km Percorrido", startColumn = 18, endColumn = 29, startRow = 2, endRow = 2, metric = "Soma"),
-        DisplayGroupItem(id = "item_kml", customLabel = "Média (KM/L)", startColumn = 18, endColumn = 29, startRow = 3, endRow = 3, metric = "Média"),
-        DisplayGroupItem(id = "item_litros", customLabel = "Total Litros", startColumn = 18, endColumn = 29, startRow = 4, endRow = 4, metric = "Soma"),
-        DisplayGroupItem(id = "item_dias", customLabel = "Dias Percorridos", startColumn = 18, endColumn = 29, startRow = 5, endRow = 5, metric = "Soma")
-    )
-    val group1 = DisplayGroup(
-        id = "group_desempenho",
-        name = "Desempenho Mensal de Rodagem",
-        nameSourceType = "TEXT",
-        items = group1Items,
-        displayOrder = 0
-    )
 
-    val group2Items = listOf(
-        DisplayGroupItem(id = "item_valortotal", customLabel = "Valor total", startColumn = 32, endColumn = 43, startRow = 2, endRow = 2, metric = "Soma"),
-        DisplayGroupItem(id = "item_precomedio", customLabel = "Preço Médio", startColumn = 32, endColumn = 43, startRow = 3, endRow = 3, metric = "Média"),
-        DisplayGroupItem(id = "item_gastokm", customLabel = "Gasto por KM", startColumn = 32, endColumn = 43, startRow = 4, endRow = 4, metric = "Média")
-    )
-    val group2 = DisplayGroup(
-        id = "group_financeiro",
-        name = "Custos e Financeiro Mensal",
-        nameSourceType = "TEXT",
-        items = group2Items,
-        displayOrder = 1
-    )
-
-    val card1 = CardConfig(
-        id = "card_desempenho",
-        groupId = "group_desempenho",
-        fieldMappings = listOf(
-            CardFieldMapping(fieldIndex = 0, titleItemReference = "Km Percorrido", valueItemReference = "item_km"),
-            CardFieldMapping(fieldIndex = 1, titleItemReference = "Média (KM/L)", valueItemReference = "item_kml"),
-            CardFieldMapping(fieldIndex = 2, titleItemReference = "Total Litros", valueItemReference = "item_litros"),
-            CardFieldMapping(fieldIndex = 3, titleItemReference = "Dias Percorridos", valueItemReference = "item_dias")
-        )
-    )
-
-    val card2 = CardConfig(
-        id = "card_financeiro",
-        groupId = "group_financeiro",
-        fieldMappings = listOf(
-            CardFieldMapping(fieldIndex = 0, titleItemReference = "Valor total", valueItemReference = "item_valortotal"),
-            CardFieldMapping(fieldIndex = 1, titleItemReference = "Preço Médio", valueItemReference = "item_precomedio"),
-            CardFieldMapping(fieldIndex = 2, titleItemReference = "Gasto por KM", valueItemReference = "item_gastokm")
-        )
-    )
-
-    return AnalysisConfig(
-        sheetName = sheetName,
-        displayGroups = listOf(group1, group2),
-        cards = listOf(card1, card2),
-        selectedMonth = "TODOS"
-    )
-}

@@ -31,6 +31,8 @@ fun ImportScreen(
     onUrlChange: (String) -> Unit,
     targetSpreadsheetName: String = "",
     onTargetSpreadsheetNameChange: (String) -> Unit = {},
+    importRangeText: String = "",
+    onImportRangeTextChange: (String) -> Unit = {},
     onFetchGoogleSheet: (String) -> Unit,
     onFileSelected: (Context, Uri) -> Unit,
     onLoadSampleData: (String) -> Unit,
@@ -179,6 +181,62 @@ fun ImportScreen(
                         text = "Importe arquivos locais Excel/CSV ou links do Google Sheets para calcular estatísticas avançadas, visualizar distribuições e gerar gráficos interativos instantaneamente.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                    )
+                }
+            }
+
+            // Intervalo de Importação (Opcional) Section
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFF0D1525))
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.FilterList,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color(0xFFEBA036)
+                        )
+                        Text(
+                            text = "Intervalo de Importação (Opcional)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color(0xFFEBA036)
+                        )
+                    }
+
+                    Text(
+                        text = "Por padrão, toda a planilha é importada. Caso queira limitar a leitura para acelerar planilhas grandes, defina o intervalo desejado abaixo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = androidx.compose.ui.graphics.Color(0xFFD0DCE5)
+                    )
+
+                    OutlinedTextField(
+                        value = importRangeText,
+                        onValueChange = onImportRangeTextChange,
+                        label = { Text("Intervalo de Células / Linhas", fontSize = 11.sp, color = androidx.compose.ui.graphics.Color(0xFFB0BEC5)) },
+                        placeholder = { Text("ex: A1:Z100 ou 1..100 (padrão: em branco)", color = androidx.compose.ui.graphics.Color(0xFF788497)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, color = androidx.compose.ui.graphics.Color.White),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF02121C),
+                            unfocusedContainerColor = androidx.compose.ui.graphics.Color(0xFF02121C),
+                            focusedBorderColor = androidx.compose.ui.graphics.Color(0xFFEBA036),
+                            unfocusedBorderColor = androidx.compose.ui.graphics.Color(0xFF2C3E55),
+                            focusedLabelColor = androidx.compose.ui.graphics.Color(0xFFEBA036),
+                            unfocusedLabelColor = androidx.compose.ui.graphics.Color(0xFFB0BEC5),
+                            focusedTextColor = androidx.compose.ui.graphics.Color.White,
+                            unfocusedTextColor = androidx.compose.ui.graphics.Color.White
+                        )
                     )
                 }
             }

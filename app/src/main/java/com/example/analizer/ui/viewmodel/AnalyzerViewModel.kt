@@ -63,6 +63,77 @@ class AnalyzerViewModel(
     private val _targetSpreadsheetName = MutableStateFlow("")
     val targetSpreadsheetName: StateFlow<String> = _targetSpreadsheetName.asStateFlow()
 
+    private val _importRangeText = MutableStateFlow("")
+    val importRangeText: StateFlow<String> = _importRangeText.asStateFlow()
+
+    private val _importStartRow = MutableStateFlow("")
+    val importStartRow: StateFlow<String> = _importStartRow.asStateFlow()
+
+    private val _importEndRow = MutableStateFlow("")
+    val importEndRow: StateFlow<String> = _importEndRow.asStateFlow()
+
+    fun setImportRangeText(range: String) {
+        _importRangeText.value = range
+    }
+
+    fun setImportStartRow(row: String) {
+        _importStartRow.value = row
+    }
+
+    fun setImportEndRow(row: String) {
+        _importEndRow.value = row
+    }
+
+    private fun applyImportRange(data: SpreadsheetData): SpreadsheetData {
+        val rangeText = _importRangeText.value.trim()
+        val startRowVal = _importStartRow.value.toIntOrNull()
+        val endRowVal = _importEndRow.value.toIntOrNull()
+
+        if (rangeText.isBlank() && startRowVal == null && endRowVal == null) return data
+
+        var parsedStart: Int? = if (startRowVal != null) (startRowVal - 1).coerceAtLeast(0) else null
+        var parsedEnd: Int? = if (endRowVal != null) (endRowVal - 1).coerceAtLeast(0) else null
+
+        if (rangeText.isNotBlank() && parsedStart == null && parsedEnd == null) {
+            val numbers = Regex("\\d+").findAll(rangeText).map { it.value.toIntOrNull() }.filterNotNull().toList()
+            if (numbers.size >= 2) {
+                parsedStart = (numbers[0] - 1).coerceAtLeast(0)
+                parsedEnd = (numbers[1] - 1).coerceAtLeast(0)
+            } else if (numbers.size == 1) {
+                parsedStart = (numbers[0] - 1).coerceAtLeast(0)
+            }
+        }
+
+        if (parsedStart == null && parsedEnd == null) return data
+
+        val slicedSheets = data.sheets.mapValues { (_, rows) ->
+            if (rows.isEmpty()) rows
+            else {
+                val s = parsedStart ?: 0
+                val e = (parsedEnd ?: (rows.size - 1)).coerceAtMost(rows.size - 1)
+                if (s <= e && s in rows.indices) {
+                    rows.subList(s, (e + 1).coerceAtMost(rows.size))
+                } else rows
+            }
+        }
+
+        val slicedFolders = data.folders.map { folder ->
+            val slicedFolderSheets = folder.sheets.mapValues { (_, rows) ->
+                if (rows.isEmpty()) rows
+                else {
+                    val s = parsedStart ?: 0
+                    val e = (parsedEnd ?: (rows.size - 1)).coerceAtMost(rows.size - 1)
+                    if (s <= e && s in rows.indices) {
+                        rows.subList(s, (e + 1).coerceAtMost(rows.size))
+                    } else rows
+                }
+            }
+            folder.copy(sheets = slicedFolderSheets)
+        }
+
+        return data.copy(sheets = slicedSheets, folders = slicedFolders)
+    }
+
     fun initPersistence(context: Context) {
         if (persistenceManager == null) {
             val manager = AppPersistenceManager(context.applicationContext)
@@ -128,9 +199,10 @@ class AnalyzerViewModel(
                             progress = 0.50f,
                             stepText = "Etapa 2 de 4"
                         )
-                        _spreadsheetData.value = data
-                        val defaultSheet = data.sheetNames.firstOrNull() ?: ""
-                        val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
+                        val slicedData = applyImportRange(data)
+                        _spreadsheetData.value = slicedData
+                        val defaultSheet = slicedData.sheetNames.firstOrNull() ?: ""
+                        val firstSheetRows = slicedData.sheets[defaultSheet] ?: emptyList()
                         val colCount = firstSheetRows.firstOrNull()?.size ?: 0
                         val allCols = (0 until colCount).toList()
 
@@ -145,7 +217,7 @@ class AnalyzerViewModel(
                             displayGroups = emptyList()
                         )
                         _analysisConfig.value = newConfig
-                        runAnalysisForData(data, newConfig)
+                        runAnalysisForData(slicedData, newConfig)
 
                         _importProgress.value = ImportProgressState(
                             isImporting = true,
@@ -194,7 +266,8 @@ class AnalyzerViewModel(
                 stepText = "Etapa 1 de 3"
             )
             try {
-                val sampleData = repository.createSampleMultiFolderData()
+                val rawSampleData = repository.createSampleMultiFolderData()
+                val sampleData = applyImportRange(rawSampleData)
                 _spreadsheetData.value = sampleData
                 val firstFolder = sampleData.folders.firstOrNull()
                 val defaultSheet = firstFolder?.sheetNames?.firstOrNull() ?: sampleData.sheetNames.firstOrNull() ?: ""
@@ -256,9 +329,10 @@ class AnalyzerViewModel(
                 _isLoading.value = false
                 result.onSuccess { data ->
                     try {
-                        _spreadsheetData.value = data
-                        val defaultSheet = data.sheetNames.firstOrNull() ?: ""
-                        val firstSheetRows = data.sheets[defaultSheet] ?: emptyList()
+                        val slicedData = applyImportRange(data)
+                        _spreadsheetData.value = slicedData
+                        val defaultSheet = slicedData.sheetNames.firstOrNull() ?: ""
+                        val firstSheetRows = slicedData.sheets[defaultSheet] ?: emptyList()
                         val colCount = firstSheetRows.firstOrNull()?.size ?: 0
                         val allCols = (0 until colCount).toList()
 
@@ -273,7 +347,7 @@ class AnalyzerViewModel(
                             displayGroups = emptyList()
                         )
                         _analysisConfig.value = newConfig
-                        runAnalysisForData(data, newConfig)
+                        runAnalysisForData(slicedData, newConfig)
 
                         _importProgress.value = ImportProgressState(
                             isImporting = true,
@@ -486,16 +560,6 @@ class AnalyzerViewModel(
                 _errorMessage.value = "Erro ao importar configurações: ${e.localizedMessage}"
             }
         }
-    }
-
-    fun loadMonthlyLayoutPreset() {
-        val currentSheet = _spreadsheetData.value?.sheetNames?.firstOrNull() ?: ""
-        val presetConfig = com.example.analizer.model.createMonthlyLayoutPreset(currentSheet)
-        _analysisConfig.value = presetConfig
-        _spreadsheetData.value?.let { data ->
-            runAnalysisForData(data, presetConfig)
-        }
-        saveCurrentDataAndConfig()
     }
 
     fun setSelectedMonth(month: String) {

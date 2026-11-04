@@ -71,6 +71,7 @@ fun MainApp(viewModel: AnalyzerViewModel) {
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val inputUrl by viewModel.inputUrl.collectAsStateWithLifecycle()
     val targetSpreadsheetName by viewModel.targetSpreadsheetName.collectAsStateWithLifecycle()
+    val importRangeText by viewModel.importRangeText.collectAsStateWithLifecycle()
 
     val exportConfigLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -106,6 +107,8 @@ fun MainApp(viewModel: AnalyzerViewModel) {
                 onUrlChange = { viewModel.setInputUrl(it) },
                 targetSpreadsheetName = targetSpreadsheetName,
                 onTargetSpreadsheetNameChange = { viewModel.setTargetSpreadsheetName(it) },
+                importRangeText = importRangeText,
+                onImportRangeTextChange = { viewModel.setImportRangeText(it) },
                 onFetchGoogleSheet = { viewModel.loadGoogleSheet(it, targetSpreadsheetName) },
                 onFileSelected = { ctx, uri -> viewModel.loadUri(ctx, uri) },
                 onLoadSampleData = { type -> viewModel.loadSampleData(type) },
@@ -137,7 +140,6 @@ fun MainApp(viewModel: AnalyzerViewModel) {
                 onExportConfig = { exportConfigLauncher.launch("analizer_config.json") },
                 onImportConfig = { importConfigLauncher.launch(arrayOf("application/json", "*/*")) },
                 onReloadData = { viewModel.reloadData(context) },
-                onLoadPreset = { viewModel.loadMonthlyLayoutPreset() },
                 currentScreen = currentScreen,
                 onScreenSelected = { currentScreen = it }
             )
@@ -148,7 +150,7 @@ fun MainApp(viewModel: AnalyzerViewModel) {
                 spreadsheetData = spreadsheetData,
                 config = analysisConfig,
                 onMonthSelected = { viewModel.setSelectedMonth(it) },
-                onLoadPreset = { viewModel.loadMonthlyLayoutPreset() },
+                onConfigChanged = { viewModel.updateConfig(it) },
                 currentScreen = currentScreen,
                 onScreenSelected = { currentScreen = it }
             )

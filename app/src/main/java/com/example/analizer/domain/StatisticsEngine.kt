@@ -134,6 +134,16 @@ class StatisticsEngine {
         return Pair(colIndex, rowIndex)
     }
 
+    fun shiftCellReference(cellRef: String, columnOffset: Int): String {
+        if (columnOffset == 0) return cellRef
+        val coords = parseCellReference(cellRef) ?: return cellRef
+        val newCol = coords.first + columnOffset
+        if (newCol < 0) return cellRef
+        val newColLetter = getExcelColumnName(newCol)
+        val rowNumber = coords.second + 1
+        return "$newColLetter$rowNumber"
+    }
+
     fun resolveCellText(sheetRows: List<List<String>>, cellRef: String): String? {
         val coords = parseCellReference(cellRef) ?: return null
         val row = sheetRows.getOrNull(coords.second) ?: return null
