@@ -22,6 +22,12 @@ data class SpreadsheetData(
     val folderNames: List<String>
         get() = if (folders.isNotEmpty()) folders.map { it.folderName }.distinct() else emptyList()
 
+    val effectiveSheetNames: List<String>
+        get() {
+            val keysClean = sheets.keys.map { it.replace(Regex("^\\[.*?\\]\\s*"), "") }.distinct()
+            return (sheetNames + keysClean + sheets.keys).distinct().filter { it.isNotBlank() }
+        }
+
     fun getSheetsForFolder(folderName: String): Map<String, List<List<String>>> {
         val match = folders.find { it.folderName == folderName }
         return match?.sheets ?: if (folderName.isBlank()) sheets else emptyMap()
@@ -29,11 +35,18 @@ data class SpreadsheetData(
 
     fun getSheetNamesForFolder(folderName: String): List<String> {
         val match = folders.find { it.folderName == folderName }
-        return match?.sheetNames ?: if (folderName.isBlank()) sheetNames else emptyList()
+        if (match != null) {
+            val keys = match.sheets.keys.toList()
+            return (match.sheetNames + keys).distinct().filter { it.isNotBlank() }
+        }
+        return effectiveSheetNames
     }
 
     fun getRows(folderName: String, sheetName: String): List<List<String>> {
         val folderSheets = getSheetsForFolder(folderName)
-        return folderSheets[sheetName] ?: sheets[sheetName] ?: emptyList()
+        return folderSheets[sheetName]
+            ?: sheets["[$folderName] $sheetName"]
+            ?: sheets[sheetName]
+            ?: emptyList()
     }
 }

@@ -38,58 +38,57 @@ class SpreadsheetRepository(
         try {
             for (i in 0 until workbook.numberOfSheets) {
                 val sheet = workbook.getSheetAt(i)
-                val sheetName = sheet.sheetName ?: "Sheet${i + 1}"
+                val rawSheetName = sheet.sheetName ?: "Sheet${i + 1}"
+                val sheetName = rawSheetName.trim()
+                if (sheetName.isEmpty()) continue
                 sheetNames.add(sheetName)
 
                 val rowsList = mutableListOf<List<String>>()
-                val firstRowNum = sheet.firstRowNum
-                val lastRowNum = sheet.lastRowNum
+                val lastRowNum = maxOf(sheet.lastRowNum, 0)
 
-                if (firstRowNum >= 0 && lastRowNum >= 0) {
-                    for (rowIndex in firstRowNum..lastRowNum) {
-                        val row = sheet.getRow(rowIndex)
-                        val rowValues = mutableListOf<String>()
-                        if (row != null) {
-                            val lastCellNum = row.lastCellNum.toInt()
-                            for (colIndex in 0 until maxOf(0, lastCellNum)) {
-                                val cell = row.getCell(colIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL)
-                                val cellValue = if (cell == null) {
-                                    ""
-                                } else {
-                                    when (cell.cellType) {
-                                        CellType.STRING -> cell.stringCellValue ?: ""
-                                        CellType.NUMERIC -> {
-                                            if (DateUtil.isCellDateFormatted(cell)) {
-                                                cell.dateCellValue?.toString() ?: ""
-                                            } else {
-                                                try {
-                                                    BigDecimal.valueOf(cell.numericCellValue).stripTrailingZeros().toPlainString()
-                                                } catch (_: Exception) {
-                                                    cell.numericCellValue.toString()
-                                                }
-                                            }
-                                        }
-                                        CellType.BOOLEAN -> cell.booleanCellValue.toString()
-                                        CellType.FORMULA -> {
+                for (rowIndex in 0..lastRowNum) {
+                    val row = sheet.getRow(rowIndex)
+                    val rowValues = mutableListOf<String>()
+                    if (row != null) {
+                        val lastCellNum = maxOf(0, row.lastCellNum.toInt())
+                        for (colIndex in 0 until lastCellNum) {
+                            val cell = row.getCell(colIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL)
+                            val cellValue = if (cell == null) {
+                                ""
+                            } else {
+                                when (cell.cellType) {
+                                    CellType.STRING -> cell.stringCellValue ?: ""
+                                    CellType.NUMERIC -> {
+                                        if (DateUtil.isCellDateFormatted(cell)) {
+                                            cell.dateCellValue?.toString() ?: ""
+                                        } else {
                                             try {
-                                                when (cell.cachedFormulaResultType) {
-                                                    CellType.STRING -> cell.stringCellValue ?: ""
-                                                    CellType.NUMERIC -> BigDecimal.valueOf(cell.numericCellValue).stripTrailingZeros().toPlainString()
-                                                    CellType.BOOLEAN -> cell.booleanCellValue.toString()
-                                                    else -> cell.cellFormula ?: ""
-                                                }
+                                                BigDecimal.valueOf(cell.numericCellValue).stripTrailingZeros().toPlainString()
                                             } catch (_: Exception) {
-                                                cell.cellFormula ?: ""
+                                                cell.numericCellValue.toString()
                                             }
                                         }
-                                        else -> ""
                                     }
+                                    CellType.BOOLEAN -> cell.booleanCellValue.toString()
+                                    CellType.FORMULA -> {
+                                        try {
+                                            when (cell.cachedFormulaResultType) {
+                                                CellType.STRING -> cell.stringCellValue ?: ""
+                                                CellType.NUMERIC -> BigDecimal.valueOf(cell.numericCellValue).stripTrailingZeros().toPlainString()
+                                                CellType.BOOLEAN -> cell.booleanCellValue.toString()
+                                                else -> cell.cellFormula ?: ""
+                                            }
+                                        } catch (_: Exception) {
+                                            cell.cellFormula ?: ""
+                                        }
+                                    }
+                                    else -> ""
                                 }
-                                rowValues.add(cellValue)
                             }
+                            rowValues.add(cellValue)
                         }
-                        rowsList.add(rowValues)
                     }
+                    rowsList.add(rowValues)
                 }
                 sheets[sheetName] = rowsList
             }
@@ -595,9 +594,10 @@ class SpreadsheetRepository(
             }
 
             val firstFs = foundSpreadsheets.first()
+            val combinedSheetNames = (allSheetNames + foundSpreadsheets.flatMap { it.sheetNames }).distinct().filter { it.isNotBlank() }
             Result.success(
                 SpreadsheetData(
-                    sheetNames = firstFs.sheetNames.ifEmpty { allSheetNames },
+                    sheetNames = combinedSheetNames.ifEmpty { firstFs.sheetNames },
                     sheets = allSheets,
                     folders = foundSpreadsheets,
                     currentFolderName = firstFs.folderName
