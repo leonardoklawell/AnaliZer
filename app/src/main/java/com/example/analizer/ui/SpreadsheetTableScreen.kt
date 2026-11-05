@@ -197,17 +197,18 @@ fun SpreadsheetTableScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Dropdown 1: Pasta Mãe
+                            // Dropdown 1: Nome da Pasta
                             Box(modifier = Modifier.weight(1f)) {
                                 ExposedDropdownMenuBox(
                                     expanded = folderExpanded,
                                     onExpandedChange = { folderExpanded = !folderExpanded }
                                 ) {
+                                    val currentFolderDisplayName = if (folderNames.isNotEmpty()) selectedFolder.substringAfterLast("/").trim() else "Pasta Principal"
                                     OutlinedTextField(
-                                        value = if (folderNames.isNotEmpty()) selectedFolder else "Pasta Principal",
+                                        value = currentFolderDisplayName,
                                         onValueChange = {},
                                         readOnly = true,
-                                        label = { Text("Pasta Mãe", fontSize = 11.sp) },
+                                        label = { Text("Nome da Pasta", fontSize = 11.sp) },
                                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = folderExpanded) },
                                         colors = OutlinedTextFieldDefaults.colors(
                                             focusedContainerColor = Color(0xFF02121C),
@@ -235,8 +236,9 @@ fun SpreadsheetTableScreen(
                                     ) {
                                         val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Pasta Principal")
                                         displayFolders.forEach { folder ->
+                                            val folderDisplayName = folder.substringAfterLast("/").trim()
                                             DropdownMenuItem(
-                                                text = { Text(folder, color = Color.White) },
+                                                text = { Text(folderDisplayName, color = Color.White) },
                                                 colors = MenuDefaults.itemColors(textColor = Color.White),
                                                 onClick = {
                                                     folderExpanded = false

@@ -700,7 +700,7 @@ fun ConfigScreen(
                                                         updatedOptions[optIdx] = option.copy(name = newName)
                                                         onConfigChanged(config.copy(monthOptions = updatedOptions))
                                                     },
-                                                    label = { Text("Nome da Opção", fontSize = 11.sp) },
+                                                    label = { Text("Nomes", fontSize = 11.sp) },
                                                     modifier = Modifier.weight(1.2f),
                                                     singleLine = true,
                                                     shape = RoundedCornerShape(8.dp),
@@ -717,7 +717,7 @@ fun ConfigScreen(
                                                         updatedOptions[optIdx] = option.copy(columnOffset = newOffset)
                                                         onConfigChanged(config.copy(monthOptions = updatedOptions))
                                                     },
-                                                    label = { Text("Deslocamento Coluna", fontSize = 11.sp) },
+                                                    label = { Text("Deslocamento", fontSize = 11.sp) },
                                                     modifier = Modifier.weight(1f),
                                                     singleLine = true,
                                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1063,7 +1063,7 @@ fun DisplayGroupEditorCard(
 ) {
     val folderNames = spreadsheetData.folderNames
     val currentFolder = group.selectedFolder.ifBlank { folderNames.firstOrNull() ?: "Pasta Principal" }
-    val groupDisplayName = group.name.ifBlank { currentFolder }
+    val groupDisplayName = currentFolder
 
     Card(
         colors = CardDefaults.cardColors(
@@ -1098,11 +1098,15 @@ fun DisplayGroupEditorCard(
                     )
                 }
 
-                IconButton(onClick = onDeleteGroup) {
+                IconButton(
+                    onClick = onDeleteGroup,
+                    modifier = Modifier.size(36.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.Delete,
                         contentDescription = "Remover Grupo",
-                        tint = Color(0xFFFF6B6B)
+                        tint = Color(0xFFFF6B6B),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -1218,7 +1222,7 @@ fun CardEditorView(
     val groupFolder = linkedGroup?.selectedFolder ?: spreadsheetData.folderNames.firstOrNull() ?: ""
     val availableSheets = spreadsheetData.getSheetNamesForFolder(groupFolder).ifEmpty { spreadsheetData.sheetNames }
     val currentSheet = cardConfig.selectedSheet.ifBlank { availableSheets.firstOrNull() ?: "" }
-    val groupNameDisplay = linkedGroup?.name?.ifBlank { linkedGroup.selectedFolder }
+    val groupNameDisplay = groupFolder
 
     var isExpanded by remember { mutableStateOf(true) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -1310,12 +1314,14 @@ fun CardEditorView(
                         onClick = {
                             val updatedCards = cards.toMutableList().apply { removeAt(cardIdx) }
                             onConfigChanged(config.copy(cards = updatedCards))
-                        }
+                        },
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Delete,
                             contentDescription = "Excluir Card",
-                            tint = Color(0xFFFF6B6B)
+                            tint = Color(0xFFFF6B6B),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
