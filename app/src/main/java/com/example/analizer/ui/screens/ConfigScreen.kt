@@ -1166,8 +1166,8 @@ fun DisplayGroupEditorCard(
                 }
 
                 OutlinedTextField(
-                    value = groupDisplayName,
-                    onValueChange = { onUpdateGroup(group.copy(name = it)) },
+                    value = currentFolder,
+                    onValueChange = { onUpdateGroup(group.copy(name = it, selectedFolder = if (group.selectedFolder.isBlank()) it else group.selectedFolder)) },
                     label = { Text("Nome do Grupo", fontSize = 11.sp) },
                     placeholder = { Text(currentFolder, color = Color(0xFF788497)) },
                     modifier = Modifier.weight(1f),

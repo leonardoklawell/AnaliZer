@@ -67,14 +67,66 @@ data class CardFieldMapping(
     val thousandsSeparator: Boolean = true
 )
 
+fun limitDecimalDigits(valueStr: String, maxDecimals: Int = 3): String {
+    if (valueStr.isBlank() || valueStr == "--") return valueStr
+
+    val hasComma = valueStr.contains(",")
+    val hasDot = valueStr.contains(".")
+
+    if (hasComma && hasDot) {
+        val lastComma = valueStr.lastIndexOf(',')
+        val lastDot = valueStr.lastIndexOf('.')
+
+        if (lastComma > lastDot) {
+            val decimalPart = valueStr.substring(lastComma + 1)
+            val digitsOnly = decimalPart.takeWhile { it.isDigit() }
+            val suffix = decimalPart.drop(digitsOnly.length)
+            if (digitsOnly.length > maxDecimals) {
+                val truncatedDigits = digitsOnly.take(maxDecimals)
+                return valueStr.substring(0, lastComma + 1) + truncatedDigits + suffix
+            }
+        } else {
+            val decimalPart = valueStr.substring(lastDot + 1)
+            val digitsOnly = decimalPart.takeWhile { it.isDigit() }
+            val suffix = decimalPart.drop(digitsOnly.length)
+            if (digitsOnly.length > maxDecimals) {
+                val truncatedDigits = digitsOnly.take(maxDecimals)
+                return valueStr.substring(0, lastDot + 1) + truncatedDigits + suffix
+            }
+        }
+    } else if (hasComma) {
+        val commaIdx = valueStr.indexOf(',')
+        val decimalPart = valueStr.substring(commaIdx + 1)
+        val digitsOnly = decimalPart.takeWhile { it.isDigit() }
+        val suffix = decimalPart.drop(digitsOnly.length)
+        if (digitsOnly.length > maxDecimals) {
+            val truncatedDigits = digitsOnly.take(maxDecimals)
+            return valueStr.substring(0, commaIdx + 1) + truncatedDigits + suffix
+        }
+    } else if (hasDot) {
+        val dotIdx = valueStr.indexOf('.')
+        val decimalPart = valueStr.substring(dotIdx + 1)
+        val digitsOnly = decimalPart.takeWhile { it.isDigit() }
+        val suffix = decimalPart.drop(digitsOnly.length)
+        if (digitsOnly.length > maxDecimals) {
+            val truncatedDigits = digitsOnly.take(maxDecimals)
+            return valueStr.substring(0, dotIdx + 1) + truncatedDigits + suffix
+        }
+    }
+
+    return valueStr
+}
+
 fun formatFieldValue(valueStr: String, numberFormat: String, thousandsSeparator: Boolean): String {
-    if (valueStr.isBlank() || valueStr == "--" || numberFormat == "AUTO") return valueStr
+    if (valueStr.isBlank() || valueStr == "--") return valueStr
+    if (numberFormat == "AUTO") return limitDecimalDigits(valueStr, 3)
+
     val cleanStr = valueStr.replace("R$", "")
         .replace("%", "")
         .trim()
         .replace(".", "")
         .replace(",", ".")
-    val doubleVal = cleanStr.toDoubleOrNull() ?: return valueStr
+    val doubleVal = cleanStr.toDoubleOrNull() ?: return limitDecimalDigits(valueStr, 3)
 
     val formatted = when (numberFormat) {
         "CURRENCY" -> {
@@ -89,9 +141,10 @@ fun formatFieldValue(valueStr: String, numberFormat: String, thousandsSeparator:
         }
         else -> valueStr
     }
-    return if (!thousandsSeparator) {
+    val res = if (!thousandsSeparator) {
         formatted.replace(".", "")
     } else formatted
+    return limitDecimalDigits(res, 3)
 }
 
 @Serializable

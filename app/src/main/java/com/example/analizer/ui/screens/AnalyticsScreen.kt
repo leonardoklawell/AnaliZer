@@ -337,7 +337,8 @@ fun resolveCardFieldValue(
     val resolvedTitleText = if (titleRef.isNotBlank()) {
         com.example.analizer.domain.StatisticsEngine().resolveCellText(sheetRows, titleRef)
     } else null
-    val label = resolvedTitleText ?: titleRef.ifBlank { defaultLabel }
+    val rawLabel = resolvedTitleText ?: titleRef.ifBlank { defaultLabel }
+    val label = com.example.analizer.model.limitDecimalDigits(rawLabel, 3)
 
     // Resolve cell reference for value reference
     val rawValue = if (cellRef.isNotBlank()) {
