@@ -23,6 +23,29 @@ class AppPersistenceManager(private val context: Context) {
     private val configFile: File
         get() = File(context.filesDir, "saved_analysis_config.json")
 
+    private val importSourceFile: File
+        get() = File(context.filesDir, "saved_import_source.json")
+
+    suspend fun saveImportSource(jsonString: String) = withContext(Dispatchers.IO) {
+        try {
+            importSourceFile.writeText(jsonString)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun loadImportSource(): String? = withContext(Dispatchers.IO) {
+        try {
+            if (importSourceFile.exists()) {
+                val text = importSourceFile.readText()
+                if (text.isNotBlank()) text else null
+            } else null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     suspend fun saveSpreadsheetData(data: SpreadsheetData) = withContext(Dispatchers.IO) {
         try {
             val jsonString = json.encodeToString(SpreadsheetData.serializer(), data)
@@ -91,6 +114,7 @@ class AppPersistenceManager(private val context: Context) {
         try {
             if (spreadsheetFile.exists()) spreadsheetFile.delete()
             if (configFile.exists()) configFile.delete()
+            if (importSourceFile.exists()) importSourceFile.delete()
         } catch (e: Exception) {
             e.printStackTrace()
         }

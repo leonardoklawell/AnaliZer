@@ -193,7 +193,8 @@ class StatisticsEngine {
                     firstSheet
                 }
                 else -> {
-                    group.name.ifBlank { if (group.selectedFolder.isNotBlank()) group.selectedFolder else "Grupo ${groupIndex + 1}" }
+                    val cleanFolder = group.selectedFolder.substringBefore(" - ").substringAfterLast("/").trim()
+                    group.name.ifBlank { if (cleanFolder.isNotBlank()) cleanFolder else "Grupo ${groupIndex + 1}" }
                 }
             }
 

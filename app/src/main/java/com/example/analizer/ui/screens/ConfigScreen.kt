@@ -440,7 +440,7 @@ fun ConfigScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Grupos Configurados (${displayGroups.size})",
+                                    text = "Grupos",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF0D1525)
@@ -1063,7 +1063,12 @@ fun DisplayGroupEditorCard(
 ) {
     val folderNames = spreadsheetData.folderNames
     val currentFolder = group.selectedFolder.ifBlank { folderNames.firstOrNull() ?: "Pasta Principal" }
-    val groupDisplayName = currentFolder
+    val cleanParentFolderName = currentFolder
+        .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+        .substringBefore(" - ")
+        .substringAfterLast("/")
+        .trim()
+    val groupDisplayName = cleanParentFolderName
 
     Card(
         colors = CardDefaults.cardColors(
@@ -1124,7 +1129,7 @@ fun DisplayGroupEditorCard(
                         onExpandedChange = { folderExpanded = !folderExpanded }
                     ) {
                         OutlinedTextField(
-                            value = currentFolder,
+                            value = cleanParentFolderName,
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Pasta Mãe", fontSize = 11.sp) },
@@ -1144,18 +1149,23 @@ fun DisplayGroupEditorCard(
                         ) {
                             val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Pasta Principal")
                             displayFolders.forEach { folder ->
+                                val cleanFolderItem = folder
+                                    .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                                    .substringBefore(" - ")
+                                    .substringAfterLast("/")
+                                    .trim()
                                 DropdownMenuItem(
-                                    text = { Text(folder, color = Color.White) },
+                                    text = { Text(cleanFolderItem, color = Color.White) },
                                     colors = MenuDefaults.itemColors(textColor = Color.White),
                                     onClick = {
                                         folderExpanded = false
-                                        val fSheets = spreadsheetData.getSheetNamesForFolder(folder)
+                                        val fSheets = spreadsheetData.getSheetNamesForFolder(cleanFolderItem)
                                         val newSheet = fSheets.firstOrNull() ?: ""
                                         onUpdateGroup(
                                             group.copy(
-                                                selectedFolder = folder,
+                                                selectedFolder = cleanFolderItem,
                                                 selectedSheets = if (newSheet.isNotBlank()) listOf(newSheet) else emptyList(),
-                                                name = folder
+                                                name = if (group.name.isBlank() || group.name == currentFolder || group.name == cleanParentFolderName) cleanFolderItem else group.name
                                             )
                                         )
                                     }
@@ -1166,10 +1176,10 @@ fun DisplayGroupEditorCard(
                 }
 
                 OutlinedTextField(
-                    value = currentFolder,
-                    onValueChange = { onUpdateGroup(group.copy(name = it, selectedFolder = if (group.selectedFolder.isBlank()) it else group.selectedFolder)) },
+                    value = group.name,
+                    onValueChange = { onUpdateGroup(group.copy(name = it)) },
                     label = { Text("Nome do Grupo", fontSize = 11.sp) },
-                    placeholder = { Text(currentFolder, color = Color(0xFF788497)) },
+                    placeholder = { Text(cleanParentFolderName, color = Color(0xFF788497)) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
@@ -1220,9 +1230,10 @@ fun CardEditorView(
 ) {
     val linkedGroup = displayGroups.find { it.id == cardConfig.groupId } ?: displayGroups.firstOrNull()
     val groupFolder = linkedGroup?.selectedFolder ?: spreadsheetData.folderNames.firstOrNull() ?: ""
-    val availableSheets = spreadsheetData.getSheetNamesForFolder(groupFolder).ifEmpty { spreadsheetData.sheetNames }
+    val cleanGroupFolder = groupFolder.substringBefore(" - ").substringAfterLast("/").trim()
+    val availableSheets = spreadsheetData.getSheetNamesForFolder(cleanGroupFolder).ifEmpty { spreadsheetData.sheetNames }
     val currentSheet = cardConfig.selectedSheet.ifBlank { availableSheets.firstOrNull() ?: "" }
-    val groupNameDisplay = groupFolder
+    val groupNameDisplay = linkedGroup?.name?.takeIf { it.isNotBlank() } ?: cleanGroupFolder
 
     var isExpanded by remember { mutableStateOf(true) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -1364,8 +1375,11 @@ fun CardEditorView(
                             expanded = groupExpanded,
                             onExpandedChange = { groupExpanded = !groupExpanded }
                         ) {
+                            val selectedGroupDisplay = linkedGroup?.name?.takeIf { it.isNotBlank() }
+                                ?: linkedGroup?.selectedFolder?.substringBefore(" - ")?.substringAfterLast("/")?.trim()
+                                ?: "Selecione o Grupo"
                             OutlinedTextField(
-                                value = linkedGroup?.name?.ifBlank { linkedGroup.selectedFolder } ?: "Selecione o Grupo",
+                                value = selectedGroupDisplay,
                                 onValueChange = {},
                                 readOnly = true,
                                 label = { Text("Grupo", fontSize = 11.sp) },
@@ -1384,7 +1398,8 @@ fun CardEditorView(
                                 modifier = Modifier.background(Color(0xFF02121C))
                             ) {
                                 displayGroups.forEach { grp ->
-                                    val grpLabel = grp.name.ifBlank { grp.selectedFolder.ifBlank { "Grupo sem nome" } }
+                                    val grpLabel = grp.name.takeIf { it.isNotBlank() }
+                                        ?: grp.selectedFolder.substringBefore(" - ").substringAfterLast("/").trim().ifBlank { "Grupo sem nome" }
                                     DropdownMenuItem(
                                         text = { Text(grpLabel, color = Color.White) },
                                         colors = MenuDefaults.itemColors(textColor = Color.White),

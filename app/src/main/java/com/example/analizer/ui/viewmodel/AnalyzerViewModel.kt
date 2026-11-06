@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 data class ImportProgressState(
     val isImporting: Boolean = false,
@@ -29,6 +31,30 @@ sealed class ImportSource {
     data class LocalUri(val uriString: String) : ImportSource()
     data class SampleData(val type: String) : ImportSource()
     data object SampleFolders : ImportSource()
+}
+
+@Serializable
+data class PersistedImportSource(
+    val type: String,
+    val url: String = "",
+    val targetName: String = "",
+    val uriString: String = "",
+    val sampleType: String = ""
+)
+
+fun ImportSource.toPersisted(): PersistedImportSource = when (this) {
+    is ImportSource.GoogleSheet -> PersistedImportSource("GOOGLE_SHEET", url = url, targetName = targetName)
+    is ImportSource.LocalUri -> PersistedImportSource("LOCAL_URI", uriString = uriString)
+    is ImportSource.SampleData -> PersistedImportSource("SAMPLE_DATA", sampleType = type)
+    is ImportSource.SampleFolders -> PersistedImportSource("SAMPLE_FOLDERS")
+}
+
+fun PersistedImportSource.toImportSource(): ImportSource = when (type) {
+    "GOOGLE_SHEET" -> ImportSource.GoogleSheet(url, targetName)
+    "LOCAL_URI" -> ImportSource.LocalUri(uriString)
+    "SAMPLE_DATA" -> ImportSource.SampleData(sampleType)
+    "SAMPLE_FOLDERS" -> ImportSource.SampleFolders
+    else -> ImportSource.SampleFolders
 }
 
 class AnalyzerViewModel(
@@ -148,6 +174,23 @@ class AnalyzerViewModel(
                     _analysisConfig.value = configToUse
                     runAnalysisForData(savedData, configToUse)
                 }
+                val savedSourceJson = manager.loadImportSource()
+                if (!savedSourceJson.isNullOrBlank()) {
+                    try {
+                        val persisted = Json.decodeFromString(
+                            PersistedImportSource.serializer(),
+                            savedSourceJson
+                        )
+                        val restoredSource = persisted.toImportSource()
+                        lastImportSource = restoredSource
+                        if (restoredSource is ImportSource.GoogleSheet) {
+                            _inputUrl.value = restoredSource.url
+                            _targetSpreadsheetName.value = restoredSource.targetName
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
             }
         }
     }
@@ -156,9 +199,21 @@ class AnalyzerViewModel(
         val manager = persistenceManager ?: return
         val data = _spreadsheetData.value ?: return
         val config = _analysisConfig.value
+        val source = lastImportSource
         viewModelScope.launch {
             manager.saveSpreadsheetData(data)
             manager.saveAnalysisConfig(config)
+            if (source != null) {
+                try {
+                    val jsonStr = Json.encodeToString(
+                        PersistedImportSource.serializer(),
+                        source.toPersisted()
+                    )
+                    manager.saveImportSource(jsonStr)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -464,12 +519,10 @@ class AnalyzerViewModel(
     fun reloadData(context: Context) {
         val currentConfig = _analysisConfig.value
         var source = lastImportSource
-        if (source == null && _inputUrl.value.isNotBlank()) {
-            source = ImportSource.GoogleSheet(_inputUrl.value.trim(), _targetSpreadsheetName.value)
-            lastImportSource = source
-        }
-        if (source == null && (_spreadsheetData.value?.folders?.isNotEmpty() == true)) {
-            source = ImportSource.SampleFolders
+        if (_inputUrl.value.isNotBlank()) {
+            val trimmedUrl = _inputUrl.value.trim()
+            val targetName = _targetSpreadsheetName.value
+            source = ImportSource.GoogleSheet(trimmedUrl, targetName)
             lastImportSource = source
         }
 
@@ -477,6 +530,7 @@ class AnalyzerViewModel(
             _spreadsheetData.value?.let { data ->
                 runAnalysisForData(data, currentConfig)
             }
+            _errorMessage.value = "Nenhum link ou arquivo salvo para recarregar. Importe pelo link na tela de Importar."
             return
         }
 
@@ -495,22 +549,24 @@ class AnalyzerViewModel(
                     is ImportSource.GoogleSheet -> {
                         val res = repository.fetchGoogleSheet(source.url, source.targetName)
                         res.onSuccess { data ->
-                            _spreadsheetData.value = data
-                            runAnalysisForData(data, currentConfig)
+                            val slicedData = applyImportRange(data)
+                            _spreadsheetData.value = slicedData
+                            runAnalysisForData(slicedData, currentConfig)
                             saveCurrentDataAndConfig()
                         }.onFailure { e ->
-                            _errorMessage.value = "Erro ao recarregar Google Sheets: ${e.localizedMessage}"
+                            _errorMessage.value = "Erro ao recarregar Google Sheets / Drive: ${e.localizedMessage ?: e.message}"
                         }
                     }
                     is ImportSource.LocalUri -> {
                         val uri = Uri.parse(source.uriString)
                         val res = repository.loadSpreadsheetFromUri(context, uri)
                         res.onSuccess { data ->
-                            _spreadsheetData.value = data
-                            runAnalysisForData(data, currentConfig)
+                            val slicedData = applyImportRange(data)
+                            _spreadsheetData.value = slicedData
+                            runAnalysisForData(slicedData, currentConfig)
                             saveCurrentDataAndConfig()
                         }.onFailure { e ->
-                            _errorMessage.value = "Erro ao recarregar arquivo local: ${e.localizedMessage}"
+                            _errorMessage.value = "Erro ao recarregar arquivo local: ${e.localizedMessage ?: e.message}"
                         }
                     }
                     is ImportSource.SampleFolders -> {

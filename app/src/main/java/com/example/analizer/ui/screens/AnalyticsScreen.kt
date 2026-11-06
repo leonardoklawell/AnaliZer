@@ -275,13 +275,14 @@ fun resolveGroupName(
     } else {
         spreadsheetData?.sheets?.get(effectiveSheet) ?: emptyList()
     }
+    val cleanFolder = group.selectedFolder.substringBefore(" - ").substringAfterLast("/").trim()
     return when (group.nameSourceType) {
         "CELL" -> {
             val cellText = com.example.analizer.domain.StatisticsEngine().resolveCellText(sheetRows, group.cellReference)
-            if (!cellText.isNullOrBlank()) cellText else group.name.ifBlank { if (group.selectedFolder.isNotBlank()) group.selectedFolder else "Célula ${group.cellReference}" }
+            if (!cellText.isNullOrBlank()) cellText else group.name.ifBlank { if (cleanFolder.isNotBlank()) cleanFolder else "Célula ${group.cellReference}" }
         }
-        "SHEET", "SHEET_NAME", "ABANOME" -> effectiveSheet.ifBlank { group.name.ifBlank { if (group.selectedFolder.isNotBlank()) group.selectedFolder else "Card ${defaultIndex + 1}" } }
-        else -> group.name.ifBlank { if (group.selectedFolder.isNotBlank()) group.selectedFolder else "Card ${defaultIndex + 1}" }
+        "SHEET", "SHEET_NAME", "ABANOME" -> effectiveSheet.ifBlank { group.name.ifBlank { if (cleanFolder.isNotBlank()) cleanFolder else "Card ${defaultIndex + 1}" } }
+        else -> group.name.ifBlank { if (cleanFolder.isNotBlank()) cleanFolder else "Card ${defaultIndex + 1}" }
     }
 }
 
@@ -701,7 +702,10 @@ fun StatisticsTab(
             ) {
                 // Dropdown 1: Filtrar por Grupo
                 Box(modifier = Modifier.weight(1f)) {
-                    val currentGroupLabel = displayGroups.find { it.id == selectedGroupIdFilter }?.name?.ifBlank { displayGroups.find { it.id == selectedGroupIdFilter }?.selectedFolder } ?: "Todos os Grupos"
+                    val currentGroup = displayGroups.find { it.id == selectedGroupIdFilter }
+                    val currentGroupLabel = currentGroup?.name?.takeIf { it.isNotBlank() }
+                        ?: currentGroup?.selectedFolder?.substringBefore(" - ")?.substringAfterLast("/")?.trim()
+                        ?: "Todos os Grupos"
                     ExposedDropdownMenuBox(
                         expanded = groupFilterExpanded,
                         onExpandedChange = { groupFilterExpanded = !groupFilterExpanded }
@@ -738,7 +742,8 @@ fun StatisticsTab(
                                 }
                             )
                             displayGroups.forEach { grp ->
-                                val label = grp.name.ifBlank { grp.selectedFolder.ifBlank { "Grupo" } }
+                                val label = grp.name.takeIf { it.isNotBlank() }
+                                    ?: grp.selectedFolder.substringBefore(" - ").substringAfterLast("/").trim().ifBlank { "Grupo" }
                                 DropdownMenuItem(
                                     text = { Text(label, color = Color.White) },
                                     onClick = {

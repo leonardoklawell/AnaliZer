@@ -139,14 +139,14 @@ class SpreadsheetRepository(
             val data = xlsxResult.getOrNull()
             if (data != null && data.sheetNames.isNotEmpty()) {
                 val folderObj = com.example.analizer.model.FolderSpreadsheet(
-                    folderName = realTitle,
+                    folderName = "Pasta Principal",
                     spreadsheetName = realTitle,
                     sheetNames = data.sheetNames,
                     sheets = data.sheets
                 )
                 val allSheets = mutableMapOf<String, List<List<String>>>()
                 data.sheets.forEach { (sName, sRows) ->
-                    allSheets["[$realTitle] $sName"] = sRows
+                    allSheets["[Pasta Principal] $sName"] = sRows
                     if (!allSheets.containsKey(sName)) allSheets[sName] = sRows
                 }
                 return@withContext Result.success(
@@ -154,7 +154,7 @@ class SpreadsheetRepository(
                         sheetNames = data.sheetNames,
                         sheets = allSheets,
                         folders = listOf(folderObj),
-                        currentFolderName = realTitle
+                        currentFolderName = "Pasta Principal"
                     )
                 )
             }
@@ -167,14 +167,14 @@ class SpreadsheetRepository(
                 val data = csvResult.getOrNull()
                 if (data != null && data.sheetNames.isNotEmpty()) {
                     val folderObj = com.example.analizer.model.FolderSpreadsheet(
-                        folderName = realTitle,
+                        folderName = "Pasta Principal",
                         spreadsheetName = realTitle,
                         sheetNames = data.sheetNames,
                         sheets = data.sheets
                     )
                     val allSheets = mutableMapOf<String, List<List<String>>>()
                     data.sheets.forEach { (sName, sRows) ->
-                        allSheets["[$realTitle] $sName"] = sRows
+                        allSheets["[Pasta Principal] $sName"] = sRows
                         if (!allSheets.containsKey(sName)) allSheets[sName] = sRows
                     }
                     return@withContext Result.success(
@@ -182,7 +182,7 @@ class SpreadsheetRepository(
                             sheetNames = data.sheetNames,
                             sheets = allSheets,
                             folders = listOf(folderObj),
-                            currentFolderName = realTitle
+                            currentFolderName = "Pasta Principal"
                         )
                     )
                 }
@@ -349,14 +349,14 @@ class SpreadsheetRepository(
                 }
 
                 val folderObj = com.example.analizer.model.FolderSpreadsheet(
-                    folderName = cleanName,
+                    folderName = "Pasta Principal",
                     spreadsheetName = cleanName,
                     sheetNames = dataResult.sheetNames,
                     sheets = dataResult.sheets
                 )
                 val allSheets = mutableMapOf<String, List<List<String>>>()
                 dataResult.sheets.forEach { (sName, sRows) ->
-                    allSheets["[$cleanName] $sName"] = sRows
+                    allSheets["[Pasta Principal] $sName"] = sRows
                     if (!allSheets.containsKey(sName)) allSheets[sName] = sRows
                 }
                 return@withContext Result.success(
@@ -364,7 +364,7 @@ class SpreadsheetRepository(
                         sheetNames = dataResult.sheetNames,
                         sheets = allSheets,
                         folders = listOf(folderObj),
-                        currentFolderName = cleanName
+                        currentFolderName = "Pasta Principal"
                     )
                 )
             } ?: Result.failure(IOException("Could not open InputStream for Uri: $uri"))
@@ -454,7 +454,26 @@ class SpreadsheetRepository(
             if (directItem != null && directItem.isSpreadsheet) {
                 val parsed = fetchDriveSpreadsheetData(directItem.id, directItem.mimeType, apiKey)
                 if (parsed != null && parsed.sheetNames.isNotEmpty()) {
-                    return@withContext Result.success(parsed)
+                    val cleanSheetTitle = directItem.name.replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "").trim()
+                    val folderObj = com.example.analizer.model.FolderSpreadsheet(
+                        folderName = "Pasta Principal",
+                        spreadsheetName = cleanSheetTitle,
+                        sheetNames = parsed.sheetNames,
+                        sheets = parsed.sheets
+                    )
+                    val allSheets = mutableMapOf<String, List<List<String>>>()
+                    parsed.sheets.forEach { (sName, sRows) ->
+                        allSheets["[Pasta Principal] $sName"] = sRows
+                        if (!allSheets.containsKey(sName)) allSheets[sName] = sRows
+                    }
+                    return@withContext Result.success(
+                        SpreadsheetData(
+                            sheetNames = parsed.sheetNames,
+                            sheets = allSheets,
+                            folders = listOf(folderObj),
+                            currentFolderName = "Pasta Principal"
+                        )
+                    )
                 }
             }
 
@@ -488,22 +507,22 @@ class SpreadsheetRepository(
                 }
             }
 
-            // Helper to format real folder display name
+            // Helper to format real folder display name (always parent folder name, never file name)
             fun createFolderSpreadsheet(childItem: DriveItem, parentFolderName: String, parsedData: SpreadsheetData): com.example.analizer.model.FolderSpreadsheet {
                 val cleanSpreadsheetName = childItem.name
                     .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
                     .trim()
-                val folderDisplayName = if (parentFolderName.isNotBlank() && parentFolderName != rootName && parentFolderName != "Subpasta" && parentFolderName != "Pasta Principal") {
-                    if (cleanSpreadsheetName.isNotBlank() && cleanSpreadsheetName != "Planilha" && cleanSpreadsheetName != parentFolderName) {
-                        "$parentFolderName - $cleanSpreadsheetName"
-                    } else {
-                        parentFolderName
-                    }
-                } else if (cleanSpreadsheetName.isNotBlank() && cleanSpreadsheetName != "Planilha") {
-                    cleanSpreadsheetName
+                val rawFolder = if (parentFolderName.isNotBlank() && parentFolderName != "Subpasta" && parentFolderName != "Pasta Principal") {
+                    parentFolderName
                 } else {
                     rootName
                 }
+                val folderDisplayName = rawFolder
+                    .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                    .substringBefore(" - ")
+                    .substringAfterLast("/")
+                    .trim()
+                    .ifBlank { "Pasta Principal" }
 
                 return com.example.analizer.model.FolderSpreadsheet(
                     folderName = folderDisplayName,
@@ -556,10 +575,17 @@ class SpreadsheetRepository(
                     val parsed = fetchDriveSpreadsheetData(extractedId, "application/vnd.google-apps.spreadsheet", apiKey)
                     if (parsed != null && parsed.sheetNames.isNotEmpty()) {
                         val realName = fetchDriveTitleFromHtml(extractedId) ?: targetSpreadsheetName
+                        val cleanSpreadsheetTitle = realName.replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "").trim()
+                        val folderNameResolved = rootName
+                            .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                            .substringBefore(" - ")
+                            .substringAfterLast("/")
+                            .trim()
+                            .ifBlank { "Pasta Principal" }
                         foundSpreadsheets.add(
                             com.example.analizer.model.FolderSpreadsheet(
-                                folderName = realName,
-                                spreadsheetName = realName,
+                                folderName = folderNameResolved,
+                                spreadsheetName = cleanSpreadsheetTitle,
                                 sheetNames = parsed.sheetNames,
                                 sheets = parsed.sheets
                             )
@@ -601,6 +627,10 @@ class SpreadsheetRepository(
                     sheets = allSheets,
                     folders = foundSpreadsheets,
                     currentFolderName = firstFs.folderName
+                        .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                        .substringBefore(" - ")
+                        .substringAfterLast("/")
+                        .trim()
                 )
             )
         } catch (e: Throwable) {

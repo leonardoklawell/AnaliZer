@@ -34,13 +34,27 @@ fun SpreadsheetTableScreen(
     onScreenSelected: (Screen) -> Unit
 ) {
     val folderNames = spreadsheetData?.folderNames ?: emptyList()
-    var selectedFolder by remember(spreadsheetData) {
+    var selectedFolder by remember(spreadsheetData, config.selectedFolder) {
         mutableStateOf(
             if (folderNames.isNotEmpty()) {
-                if (config.selectedFolder.isNotBlank() && folderNames.contains(config.selectedFolder)) {
-                    config.selectedFolder
+                val cleanConfig = config.selectedFolder
+                    .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                    .substringBefore(" - ")
+                    .substringAfterLast("/")
+                    .trim()
+                if (cleanConfig.isNotBlank() && folderNames.contains(cleanConfig)) {
+                    cleanConfig
                 } else {
-                    spreadsheetData?.currentFolderName?.ifBlank { folderNames.first() } ?: folderNames.first()
+                    val cleanCurrent = spreadsheetData?.currentFolderName
+                        ?.replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                        ?.substringBefore(" - ")
+                        ?.substringAfterLast("/")
+                        ?.trim()
+                    if (!cleanCurrent.isNullOrBlank() && folderNames.contains(cleanCurrent)) {
+                        cleanCurrent
+                    } else {
+                        folderNames.first()
+                    }
                 }
             } else ""
         )
@@ -203,7 +217,13 @@ fun SpreadsheetTableScreen(
                                     expanded = folderExpanded,
                                     onExpandedChange = { folderExpanded = !folderExpanded }
                                 ) {
-                                    val currentFolderDisplayName = if (folderNames.isNotEmpty()) selectedFolder.substringAfterLast("/").trim() else "Pasta Principal"
+                                    val currentFolderDisplayName = if (folderNames.isNotEmpty()) {
+                                        selectedFolder
+                                            .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                                            .substringBefore(" - ")
+                                            .substringAfterLast("/")
+                                            .trim()
+                                    } else "Pasta Principal"
                                     OutlinedTextField(
                                         value = currentFolderDisplayName,
                                         onValueChange = {},
@@ -236,21 +256,25 @@ fun SpreadsheetTableScreen(
                                     ) {
                                         val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Pasta Principal")
                                         displayFolders.forEach { folder ->
-                                            val folderDisplayName = folder.substringAfterLast("/").trim()
+                                            val folderDisplayName = folder
+                                                .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
+                                                .substringBefore(" - ")
+                                                .substringAfterLast("/")
+                                                .trim()
                                             DropdownMenuItem(
                                                 text = { Text(folderDisplayName, color = Color.White) },
                                                 colors = MenuDefaults.itemColors(textColor = Color.White),
                                                 onClick = {
                                                     folderExpanded = false
-                                                    selectedFolder = folder
-                                                    val fSheets = spreadsheetData.getSheetNamesForFolder(folder)
+                                                    selectedFolder = folderDisplayName
+                                                    val fSheets = spreadsheetData.getSheetNamesForFolder(folderDisplayName)
                                                     val newSheet = fSheets.firstOrNull() ?: ""
                                                     selectedSheet = newSheet
-                                                    val sheetRows = spreadsheetData.getRows(folder, newSheet)
+                                                    val sheetRows = spreadsheetData.getRows(folderDisplayName, newSheet)
                                                     val cols = (0 until (sheetRows.firstOrNull()?.size ?: 0)).toList()
                                                      onConfigChanged(
                                                         config.copy(
-                                                            selectedFolder = folder,
+                                                            selectedFolder = folderDisplayName,
                                                             sheetName = newSheet,
                                                             selectedColumnIndices = cols,
                                                             startRow = null,
