@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -438,26 +439,25 @@ fun AnalysisStatCard(
             HorizontalDivider(color = Color(0xFF2C3E55), thickness = 1.dp)
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Body Grid: 4 Columns x 2 Pairs = 16 Items (ITEM 4 to ITEM 19)
-            val col1Top = resolvedValues[3]
-            val col1TopVal = resolvedValues[4]
-            val col1Bottom = resolvedValues[5]
-            val col1BottomVal = resolvedValues[6]
+            data class ColumnPair(val labelItem: ResolvedCardItem, val valueItem: ResolvedCardItem)
 
-            val col2Top = resolvedValues[7]
-            val col2TopVal = resolvedValues[8]
-            val col2Bottom = resolvedValues[9]
-            val col2BottomVal = resolvedValues[10]
+            // Body Row 1: Top 2 lines (ITEM 4/5, ITEM 8/9, ITEM 12/13, ITEM 16/17)
+            val row1Candidates = listOf(
+                ColumnPair(resolvedValues[3], resolvedValues[4]),
+                ColumnPair(resolvedValues[7], resolvedValues[8]),
+                ColumnPair(resolvedValues[11], resolvedValues[12]),
+                ColumnPair(resolvedValues[15], resolvedValues[16])
+            )
+            val activeRow1 = row1Candidates.filter { it.labelItem.enabled || it.valueItem.enabled }
 
-            val col3Top = resolvedValues[11]
-            val col3TopVal = resolvedValues[12]
-            val col3Bottom = resolvedValues[13]
-            val col3BottomVal = resolvedValues[14]
-
-            val col4Top = resolvedValues[15]
-            val col4TopVal = resolvedValues[16]
-            val col4Bottom = resolvedValues[17]
-            val col4BottomVal = resolvedValues[18]
+            // Body Row 2: Bottom 2 lines (ITEM 6/7, ITEM 10/11, ITEM 14/15, ITEM 18/19)
+            val row2Candidates = listOf(
+                ColumnPair(resolvedValues[5], resolvedValues[6]),
+                ColumnPair(resolvedValues[9], resolvedValues[10]),
+                ColumnPair(resolvedValues[13], resolvedValues[14]),
+                ColumnPair(resolvedValues[17], resolvedValues[18])
+            )
+            val activeRow2 = row2Candidates.filter { it.labelItem.enabled || it.valueItem.enabled }
 
             fun getLabel(item: ResolvedCardItem): String = if (item.enabled) (if (item.value != "--" && item.value.isNotBlank()) item.value else item.label) else ""
             fun getValue(item: ResolvedCardItem): String = if (item.enabled) (if (item.value != "--" && item.value.isNotBlank()) item.value else item.label) else ""
@@ -465,41 +465,39 @@ fun AnalysisStatCard(
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Row 1 of Body: Top Pair across 4 Columns
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(getLabel(col1Top), getValue(col1TopVal))
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(getLabel(col2Top), getValue(col2TopVal))
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(getLabel(col3Top), getValue(col3TopVal))
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(getLabel(col4Top), getValue(col4TopVal))
+                // Row 1 of Body: Top 2 lines with independent dynamic column distribution
+                if (activeRow1.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        activeRow1.forEach { pair ->
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                StatDetailItem(getLabel(pair.labelItem), getValue(pair.valueItem))
+                            }
+                        }
                     }
                 }
 
-                // Row 2 of Body: Bottom Pair across 4 Columns
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(getLabel(col1Bottom), getValue(col1BottomVal))
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(getLabel(col2Bottom), getValue(col2BottomVal))
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(getLabel(col3Bottom), getValue(col3BottomVal))
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        StatDetailItem(getLabel(col4Bottom), getValue(col4BottomVal))
+                // Row 2 of Body: Bottom 2 lines with independent dynamic column distribution
+                if (activeRow2.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        activeRow2.forEach { pair ->
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                StatDetailItem(getLabel(pair.labelItem), getValue(pair.valueItem))
+                            }
+                        }
                     }
                 }
             }
@@ -974,18 +972,22 @@ fun StatisticsTab(
 @Composable
 fun StatDetailItem(label: String, value: String) {
     val displayValue = if (value.isBlank() || value == "-") "--" else value
-    Column {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-            color = Color(0xFF94A3B8)
+            color = Color(0xFF94A3B8),
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = displayValue,
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
             fontWeight = FontWeight.SemiBold,
-            color = Color.White
+            color = Color.White,
+            textAlign = TextAlign.Center
         )
     }
 }
