@@ -718,6 +718,8 @@ fun ConfigScreen(
                                                     Text("Padrão", fontSize = 11.sp, color = if (option.isDefault) Color(0xFFEBA036) else Color.White, fontWeight = if (option.isDefault) FontWeight.Bold else FontWeight.Normal)
                                                 }
 
+                                                val resolvedOptName = com.example.analizer.model.resolveMonthOptionDisplayName(option, spreadsheetData, config.selectedFolder, config.sheetName, displayGroups)
+
                                                 OutlinedTextField(
                                                     value = option.name,
                                                     onValueChange = { newName ->
@@ -726,6 +728,9 @@ fun ConfigScreen(
                                                         onConfigChanged(config.copy(monthOptions = updatedOptions))
                                                     },
                                                     label = { Text("Nomes", fontSize = 11.sp) },
+                                                    supportingText = if (resolvedOptName != option.name) {
+                                                        { Text("Exibe: $resolvedOptName", fontSize = 10.sp, color = Color(0xFFEBA036)) }
+                                                    } else null,
                                                     modifier = Modifier.weight(1.2f),
                                                     singleLine = true,
                                                     shape = RoundedCornerShape(8.dp),

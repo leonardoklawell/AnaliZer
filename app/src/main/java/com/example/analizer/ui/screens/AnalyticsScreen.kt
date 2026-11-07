@@ -324,7 +324,10 @@ fun resolveCardFieldValue(
     // Shift cell references according to month/period selector if checked for this card and item
     val isMappingObey = mapping?.obeyMonthSelector ?: true
     if (cardConfig.obeyMonthSelector && isMappingObey && !selectedMonth.equals("TODOS", ignoreCase = true)) {
-        val selectedOpt = monthOptions.find { it.name.equals(selectedMonth, ignoreCase = true) }
+        val selectedOpt = monthOptions.find {
+            it.name.equals(selectedMonth, ignoreCase = true) ||
+            com.example.analizer.model.resolveMonthOptionDisplayName(it, spreadsheetData, folderName, sheetName, displayGroups).equals(selectedMonth, ignoreCase = true)
+        }
         val offset = selectedOpt?.columnOffset ?: 0
         if (offset != 0) {
             if (cellRef.isNotBlank()) {
@@ -512,9 +515,22 @@ fun MonthSelectorBar(
     selectedMonth: String,
     onMonthSelected: (String) -> Unit,
     monthOptions: List<com.example.analizer.model.MonthSelectorOption> = emptyList(),
+    spreadsheetData: SpreadsheetData? = null,
+    config: com.example.analizer.model.AnalysisConfig? = null,
+    displayGroups: List<com.example.analizer.model.DisplayGroup> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val displayOptions = if (monthOptions.isNotEmpty()) monthOptions else com.example.analizer.model.DEFAULT_MONTH_OPTIONS
+    val folder = config?.selectedFolder.orEmpty()
+    val sheet = config?.sheetName.orEmpty()
+
+    val selectedOpt = displayOptions.find {
+        it.name.equals(selectedMonth, ignoreCase = true) ||
+        com.example.analizer.model.resolveMonthOptionDisplayName(it, spreadsheetData, folder, sheet, displayGroups).equals(selectedMonth, ignoreCase = true)
+    }
+    val selectedDisplayLabel = selectedOpt?.let {
+        com.example.analizer.model.resolveMonthOptionDisplayName(it, spreadsheetData, folder, sheet, displayGroups)
+    } ?: selectedMonth
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -537,7 +553,7 @@ fun MonthSelectorBar(
                     color = Color(0xFFEBA036)
                 )
                 Text(
-                    text = if (selectedMonth.equals("TODOS", ignoreCase = true)) "Exibindo Acumulado (Todos)" else "Mês: $selectedMonth",
+                    text = if (selectedMonth.equals("TODOS", ignoreCase = true) || selectedDisplayLabel.equals("TODOS", ignoreCase = true)) "Exibindo Acumulado (Todos)" else "Mês: $selectedDisplayLabel",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White
                 )
@@ -551,12 +567,13 @@ fun MonthSelectorBar(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 displayOptions.forEach { opt ->
-                    val month = opt.name
-                    val isSelected = month.equals(selectedMonth, ignoreCase = true)
+                    val rawMonthName = opt.name
+                    val displayName = com.example.analizer.model.resolveMonthOptionDisplayName(opt, spreadsheetData, folder, sheet, displayGroups)
+                    val isSelected = rawMonthName.equals(selectedMonth, ignoreCase = true) || displayName.equals(selectedMonth, ignoreCase = true)
                     FilterChip(
                         selected = isSelected,
-                        onClick = { onMonthSelected(month) },
-                        label = { Text(month, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp) },
+                        onClick = { onMonthSelected(rawMonthName) },
+                        label = { Text(displayName, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFFEBA036),
                             selectedLabelColor = Color(0xFF0D1525),

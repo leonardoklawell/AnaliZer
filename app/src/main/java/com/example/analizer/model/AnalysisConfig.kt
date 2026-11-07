@@ -199,6 +199,40 @@ data class MonthSelectorOption(
     val isDefault: Boolean = false
 )
 
+fun resolveMonthOptionDisplayName(
+    option: MonthSelectorOption,
+    spreadsheetData: SpreadsheetData?,
+    selectedFolder: String = "",
+    selectedSheet: String = "",
+    displayGroups: List<DisplayGroup> = emptyList()
+): String {
+    val rawName = option.name.trim()
+    if (rawName.isBlank()) return option.name
+
+    val engine = com.example.analizer.domain.StatisticsEngine()
+    if (engine.parseCellReference(rawName) == null) {
+        return option.name
+    }
+
+    val firstGroup = displayGroups.firstOrNull()
+    val folder = selectedFolder.ifBlank { firstGroup?.selectedFolder ?: "" }
+    val sheet = selectedSheet.ifBlank { firstGroup?.selectedSheets?.firstOrNull() ?: "" }
+
+    val sheetRows = if (folder.isNotBlank()) {
+        spreadsheetData?.getRows(folder, sheet)
+            ?: (if (sheet.isNotBlank()) spreadsheetData?.sheets?.get(sheet) else null)
+            ?: spreadsheetData?.sheets?.values?.firstOrNull()
+            ?: emptyList()
+    } else {
+        (if (sheet.isNotBlank()) spreadsheetData?.sheets?.get(sheet) else null)
+            ?: spreadsheetData?.sheets?.values?.firstOrNull()
+            ?: emptyList()
+    }
+
+    val resolvedValue = engine.resolveCellText(sheetRows, rawName)
+    return if (!resolvedValue.isNullOrBlank()) resolvedValue else option.name
+}
+
 val DEFAULT_MONTH_OPTIONS = listOf(
     MonthSelectorOption(id = "opt_todos", name = "TODOS", columnOffset = 0, isDefault = true),
     MonthSelectorOption(id = "opt_jan", name = "JAN", columnOffset = 0),
