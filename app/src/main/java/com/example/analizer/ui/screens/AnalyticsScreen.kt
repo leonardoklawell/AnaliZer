@@ -321,8 +321,9 @@ fun resolveCardFieldValue(
         spreadsheetData?.sheets?.get(sheetName) ?: emptyList()
     }
 
-    // Shift cell references according to month/period selector if checked for this card
-    if (cardConfig.obeyMonthSelector && !selectedMonth.equals("TODOS", ignoreCase = true)) {
+    // Shift cell references according to month/period selector if checked for this card and item
+    val isMappingObey = mapping?.obeyMonthSelector ?: true
+    if (cardConfig.obeyMonthSelector && isMappingObey && !selectedMonth.equals("TODOS", ignoreCase = true)) {
         val selectedOpt = monthOptions.find { it.name.equals(selectedMonth, ignoreCase = true) }
         val offset = selectedOpt?.columnOffset ?: 0
         if (offset != 0) {
@@ -650,21 +651,33 @@ fun StatisticsTab(
     var groupFilterExpanded by remember { mutableStateOf(false) }
     var itemFilterExpanded by remember { mutableStateOf(false) }
 
+    val sortTitleToValueIndexMap = remember {
+        mapOf(
+            3 to 4,    // ITEM 4 -> ITEM 5
+            7 to 8,    // ITEM 8 -> ITEM 9
+            11 to 12,  // ITEM 12 -> ITEM 13
+            15 to 16,  // ITEM 16 -> ITEM 17
+            5 to 6,    // ITEM 6 -> ITEM 7
+            9 to 10,   // ITEM 10 -> ITEM 11
+            13 to 14,  // ITEM 14 -> ITEM 15
+            17 to 18   // ITEM 18 -> ITEM 19
+        )
+    }
+    val allowedSortTitleIndices = remember { listOf(3, 7, 11, 15, 5, 9, 13, 17) }
+
     val sortedCards = remember(cards, sortFieldIndex, sortAscending, config.selectedMonth, config.monthOptions) {
         if (sortFieldIndex == null) cards
         else {
-            val idx = sortFieldIndex!!
+            val titleIdx = sortFieldIndex!!
+            val valueIdx = sortTitleToValueIndexMap[titleIdx] ?: titleIdx
             cards.sortedWith(Comparator { c1, c2 ->
-                val itemRes1 = resolveCardFieldValue(idx, c1, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
-                val itemRes2 = resolveCardFieldValue(idx, c2, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
+                val itemRes1 = resolveCardFieldValue(valueIdx, c1, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
+                val itemRes2 = resolveCardFieldValue(valueIdx, c2, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
                 val str1 = if (itemRes1.value != "--" && itemRes1.value.isNotBlank()) itemRes1.value else itemRes1.label
                 val str2 = if (itemRes2.value != "--" && itemRes2.value.isNotBlank()) itemRes2.value else itemRes2.label
 
-                val clean1 = str1.replace("R$", "").replace(".", "").replace(",", ".").trim()
-                val clean2 = str2.replace("R$", "").replace(".", "").replace(",", ".").trim()
-
-                val num1 = clean1.toDoubleOrNull()
-                val num2 = clean2.toDoubleOrNull()
+                val num1 = com.example.analizer.model.parseToDouble(str1)
+                val num2 = com.example.analizer.model.parseToDouble(str2)
 
                 val cmp = if (num1 != null && num2 != null) {
                     num1.compareTo(num2)
@@ -885,8 +898,18 @@ fun StatisticsTab(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
+                    val currentSortLabel = if (sortFieldIndex != null) {
+                        val idx = sortFieldIndex!!
+                        val titleItemNum = idx + 1
+                        val resolvedTitle = cards.firstNotNullOfOrNull { card ->
+                            val res = resolveCardFieldValue(idx, card, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
+                            res.label.takeIf { it.isNotBlank() && !it.equals("ITEM $titleItemNum", ignoreCase = true) }
+                        }
+                        resolvedTitle ?: "ITEM $titleItemNum"
+                    } else "Ordenar"
+
                     Text(
-                        text = if (sortFieldIndex == null) "Ordenar" else "Item ${sortFieldIndex!! + 1} (${if (sortAscending) "↑" else "↓"})",
+                        text = if (sortFieldIndex == null) "Ordenar" else "$currentSortLabel (${if (sortAscending) "↑" else "↓"})",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
@@ -922,15 +945,19 @@ fun StatisticsTab(
                     )
                     HorizontalDivider(color = Color(0xFF1E283E))
 
-                    (0 until 19).forEach { fieldIdx ->
-                        val sampleMapping = cards.firstOrNull()?.fieldMappings?.find { it.fieldIndex == fieldIdx }
-                        val labelName = sampleMapping?.titleItemReference?.ifBlank { "ITEM ${fieldIdx + 1}" } ?: "ITEM ${fieldIdx + 1}"
+                    allowedSortTitleIndices.forEach { fieldIdx ->
+                        val titleItemNum = fieldIdx + 1
+                        val resolvedTitle = cards.firstNotNullOfOrNull { card ->
+                            val res = resolveCardFieldValue(fieldIdx, card, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
+                            res.label.takeIf { it.isNotBlank() && !it.equals("ITEM $titleItemNum", ignoreCase = true) }
+                        }
+                        val displayName = resolvedTitle ?: "ITEM $titleItemNum"
                         val isSelected = sortFieldIndex == fieldIdx
 
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    text = "ITEM ${fieldIdx + 1} ($labelName)",
+                                    text = displayName,
                                     color = if (isSelected) Color(0xFFEBA036) else Color.White,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )

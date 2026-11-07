@@ -760,6 +760,200 @@ fun ConfigScreen(
                                     }
                                 }
                             }
+
+                            // Quadro: Itens dos Cards que obedecem ao Seletor de Período
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1825))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Text(
+                                        text = "Itens dos Cards que obedecem ao Seletor",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFEBA036)
+                                    )
+                                    Text(
+                                        text = "Marque ou desmarque os itens dos cards que vão obedecer à mudança de célula realizada pelo seletor de período.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFFD0DCE5)
+                                    )
+
+                                    // Action Buttons: Marcar Todos / Desmarcar Todos
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                val currentCards = config.effectiveCards
+                                                val updatedCards = currentCards.map { card ->
+                                                    val updatedMappings = card.fieldMappings.map { mapping ->
+                                                        mapping.copy(obeyMonthSelector = true)
+                                                    }
+                                                    card.copy(obeyMonthSelector = true, fieldMappings = updatedMappings)
+                                                }
+                                                onConfigChanged(config.copy(cards = updatedCards))
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = Color(0xFF02121C),
+                                                contentColor = Color(0xFFEBA036)
+                                            )
+                                        ) {
+                                            Text("Marcar Todos", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                val currentCards = config.effectiveCards
+                                                val updatedCards = currentCards.map { card ->
+                                                    val updatedMappings = card.fieldMappings.map { mapping ->
+                                                        mapping.copy(obeyMonthSelector = false)
+                                                    }
+                                                    card.copy(obeyMonthSelector = false, fieldMappings = updatedMappings)
+                                                }
+                                                onConfigChanged(config.copy(cards = updatedCards))
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = Color(0xFF02121C),
+                                                contentColor = Color(0xFFFF6B6B)
+                                            )
+                                        ) {
+                                            Text("Desmarcar Todos", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    val activeCards = config.effectiveCards
+                                    if (activeCards.isEmpty()) {
+                                        Text(
+                                            text = "Nenhum card configurado no momento.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color(0xFF788497)
+                                        )
+                                    } else {
+                                        activeCards.forEachIndexed { cardIdx, cardConfig ->
+                                            val linkedGroup = config.effectiveDisplayGroups.find { it.id == cardConfig.groupId }
+                                            val groupFolderClean = (linkedGroup?.selectedFolder ?: "").substringBefore(" - ").substringAfterLast("/").trim()
+                                            val groupTitle = linkedGroup?.name?.takeIf { it.isNotBlank() }
+                                                ?: groupFolderClean.ifBlank { "Card ${cardIdx + 1}" }
+
+                                            Card(
+                                                colors = CardDefaults.cardColors(containerColor = Color(0xFF02121C)),
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                ) {
+                                                    // Header with Card toggle
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                            modifier = Modifier.clickable {
+                                                                val newObey = !cardConfig.obeyMonthSelector
+                                                                val updatedCards = activeCards.toMutableList()
+                                                                val updatedMappings = cardConfig.fieldMappings.map { it.copy(obeyMonthSelector = newObey) }
+                                                                updatedCards[cardIdx] = cardConfig.copy(obeyMonthSelector = newObey, fieldMappings = updatedMappings)
+                                                                onConfigChanged(config.copy(cards = updatedCards))
+                                                            }
+                                                        ) {
+                                                            Checkbox(
+                                                                checked = cardConfig.obeyMonthSelector,
+                                                                onCheckedChange = { checked ->
+                                                                    val updatedCards = activeCards.toMutableList()
+                                                                    val updatedMappings = cardConfig.fieldMappings.map { it.copy(obeyMonthSelector = checked) }
+                                                                    updatedCards[cardIdx] = cardConfig.copy(obeyMonthSelector = checked, fieldMappings = updatedMappings)
+                                                                    onConfigChanged(config.copy(cards = updatedCards))
+                                                                },
+                                                                colors = CheckboxDefaults.colors(
+                                                                    checkedColor = Color(0xFFEBA036),
+                                                                    uncheckedColor = Color(0xFF788497)
+                                                                )
+                                                            )
+                                                            Text(
+                                                                text = "Card ${cardIdx + 1} - $groupTitle",
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontSize = 13.sp,
+                                                                color = Color(0xFFEBA036)
+                                                            )
+                                                        }
+                                                    }
+
+                                                    HorizontalDivider(color = Color(0xFF2C3E55))
+
+                                                    // Items list for this Card
+                                                    val enabledMappings = cardConfig.fieldMappings.filter { it.enabled }
+                                                    val displayMappings = if (enabledMappings.isNotEmpty()) enabledMappings else cardConfig.fieldMappings.take(19)
+
+                                                    Column(
+                                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        displayMappings.forEach { mapping ->
+                                                            val defaultLabel = "ITEM ${mapping.fieldIndex + 1}"
+                                                            val itemLabel = mapping.titleItemReference.ifBlank { defaultLabel }
+                                                            val cellInfo = if (mapping.valueItemReference.isNotBlank()) " (${mapping.valueItemReference})" else ""
+                                                            val isItemObey = cardConfig.obeyMonthSelector && mapping.obeyMonthSelector
+
+                                                            Row(
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clickable {
+                                                                        val newObey = !isItemObey
+                                                                        val updatedMappings = cardConfig.fieldMappings.map { m ->
+                                                                            if (m.fieldIndex == mapping.fieldIndex) m.copy(obeyMonthSelector = newObey) else m
+                                                                        }
+                                                                        val updatedCards = activeCards.toMutableList()
+                                                                        updatedCards[cardIdx] = cardConfig.copy(fieldMappings = updatedMappings)
+                                                                        onConfigChanged(config.copy(cards = updatedCards))
+                                                                    }
+                                                                    .padding(vertical = 2.dp, horizontal = 4.dp)
+                                                            ) {
+                                                                Checkbox(
+                                                                    checked = isItemObey,
+                                                                    onCheckedChange = { checked ->
+                                                                        val updatedMappings = cardConfig.fieldMappings.map { m ->
+                                                                            if (m.fieldIndex == mapping.fieldIndex) m.copy(obeyMonthSelector = checked) else m
+                                                                        }
+                                                                        val updatedCards = activeCards.toMutableList()
+                                                                        updatedCards[cardIdx] = cardConfig.copy(fieldMappings = updatedMappings)
+                                                                        onConfigChanged(config.copy(cards = updatedCards))
+                                                                    },
+                                                                    colors = CheckboxDefaults.colors(
+                                                                        checkedColor = Color(0xFFEBA036),
+                                                                        uncheckedColor = Color(0xFF788497)
+                                                                    )
+                                                                )
+                                                                Text(
+                                                                    text = "$itemLabel$cellInfo",
+                                                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                                                                    color = if (isItemObey) Color.White else Color(0xFF64748B),
+                                                                    fontWeight = if (isItemObey) FontWeight.SemiBold else FontWeight.Normal
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     3 -> {
@@ -1967,28 +2161,59 @@ fun CardSettingsDialog(
                                     }
 
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.clickable {
-                                            val updated = fieldMappings.toMutableList()
-                                            val newMap = currentMapping.copy(thousandsSeparator = !currentMapping.thousandsSeparator)
-                                            if (mappingIdx >= 0) updated[mappingIdx] = newMap else updated.add(newMap)
-                                            fieldMappings = updated
-                                        }
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Checkbox(
-                                            checked = currentMapping.thousandsSeparator,
-                                            onCheckedChange = { checked ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.clickable {
                                                 val updated = fieldMappings.toMutableList()
-                                                val newMap = currentMapping.copy(thousandsSeparator = checked)
+                                                val newMap = currentMapping.copy(thousandsSeparator = !currentMapping.thousandsSeparator)
                                                 if (mappingIdx >= 0) updated[mappingIdx] = newMap else updated.add(newMap)
                                                 fieldMappings = updated
-                                            },
-                                            colors = CheckboxDefaults.colors(
-                                                checkedColor = Color(0xFFEBA036),
-                                                uncheckedColor = Color(0xFF788497)
+                                            }
+                                        ) {
+                                            Checkbox(
+                                                checked = currentMapping.thousandsSeparator,
+                                                onCheckedChange = { checked ->
+                                                    val updated = fieldMappings.toMutableList()
+                                                    val newMap = currentMapping.copy(thousandsSeparator = checked)
+                                                    if (mappingIdx >= 0) updated[mappingIdx] = newMap else updated.add(newMap)
+                                                    fieldMappings = updated
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFFEBA036),
+                                                    uncheckedColor = Color(0xFF788497)
+                                                )
                                             )
-                                        )
-                                        Text("Milhar", fontSize = 11.sp, color = Color.White)
+                                            Text("Milhar", fontSize = 11.sp, color = Color.White)
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.clickable {
+                                                val updated = fieldMappings.toMutableList()
+                                                val newMap = currentMapping.copy(obeyMonthSelector = !currentMapping.obeyMonthSelector)
+                                                if (mappingIdx >= 0) updated[mappingIdx] = newMap else updated.add(newMap)
+                                                fieldMappings = updated
+                                            }
+                                        ) {
+                                            Checkbox(
+                                                checked = currentMapping.obeyMonthSelector,
+                                                onCheckedChange = { checked ->
+                                                    val updated = fieldMappings.toMutableList()
+                                                    val newMap = currentMapping.copy(obeyMonthSelector = checked)
+                                                    if (mappingIdx >= 0) updated[mappingIdx] = newMap else updated.add(newMap)
+                                                    fieldMappings = updated
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFFEBA036),
+                                                    uncheckedColor = Color(0xFF788497)
+                                                )
+                                            )
+                                            Text("Obedecer Seletor", fontSize = 11.sp, color = Color.White)
+                                        }
                                     }
                                 }
                             }

@@ -64,7 +64,8 @@ data class CardFieldMapping(
     val valueItemReference: String = "", // Cell reference (e.g. A1, S3) or direct text
     val enabled: Boolean = true,
     val numberFormat: String = "AUTO", // "AUTO", "CURRENCY", "INTEGER", "DECIMAL", "PERCENT"
-    val thousandsSeparator: Boolean = true
+    val thousandsSeparator: Boolean = true,
+    val obeyMonthSelector: Boolean = true
 )
 
 fun limitDecimalDigits(valueStr: String, maxDecimals: Int = 3): String {
@@ -117,34 +118,77 @@ fun limitDecimalDigits(valueStr: String, maxDecimals: Int = 3): String {
     return valueStr
 }
 
+fun parseToDouble(valueStr: String): Double? {
+    val clean = valueStr.replace("R$", "").replace("%", "").trim()
+    if (clean.isBlank()) return null
+    if (clean.contains(".") && clean.contains(",")) {
+        val lastDot = clean.lastIndexOf('.')
+        val lastComma = clean.lastIndexOf(',')
+        return if (lastComma > lastDot) {
+            clean.replace(".", "").replace(",", ".").toDoubleOrNull()
+        } else {
+            clean.replace(",", "").toDoubleOrNull()
+        }
+    } else if (clean.contains(",")) {
+        return clean.replace(",", ".").toDoubleOrNull()
+    } else if (clean.contains(".")) {
+        val dotIdx = clean.indexOf('.')
+        val decimalDigits = clean.length - dotIdx - 1
+        return if (decimalDigits == 3 && clean.count { it == '.' } == 1 && clean.length > 4) {
+            clean.replace(".", "").toDoubleOrNull()
+        } else {
+            clean.toDoubleOrNull()
+        }
+    } else {
+        return clean.toDoubleOrNull()
+    }
+}
+
 fun formatFieldValue(valueStr: String, numberFormat: String, thousandsSeparator: Boolean): String {
     if (valueStr.isBlank() || valueStr == "--") return valueStr
     if (numberFormat == "AUTO") return limitDecimalDigits(valueStr, 3)
 
-    val cleanStr = valueStr.replace("R$", "")
-        .replace("%", "")
-        .trim()
-        .replace(".", "")
-        .replace(",", ".")
-    val doubleVal = cleanStr.toDoubleOrNull() ?: return limitDecimalDigits(valueStr, 3)
+    val doubleVal = parseToDouble(valueStr)
+
+    if (numberFormat == "CURRENCY") {
+        val numStr = if (doubleVal != null) {
+            if (thousandsSeparator) {
+                String.format(java.util.Locale("pt", "BR"), "%,.2f", doubleVal)
+            } else {
+                String.format(java.util.Locale("pt", "BR"), "%.2f", doubleVal)
+            }
+        } else {
+            valueStr.replace("R$", "").trim()
+        }
+        val trimmedNum = numStr.trim()
+        val finalWithSymbol = if (trimmedNum.startsWith("R$")) trimmedNum else "R$ $trimmedNum"
+        return limitDecimalDigits(finalWithSymbol, 3)
+    }
+
+    if (doubleVal == null) return limitDecimalDigits(valueStr, 3)
 
     val formatted = when (numberFormat) {
-        "CURRENCY" -> {
-            val num = String.format(java.util.Locale("pt", "BR"), "%,.2f", doubleVal)
-            "R$ $num"
+        "INTEGER" -> {
+            if (thousandsSeparator) {
+                String.format(java.util.Locale("pt", "BR"), "%,d", doubleVal.toLong())
+            } else {
+                String.format(java.util.Locale("pt", "BR"), "%d", doubleVal.toLong())
+            }
         }
-        "INTEGER" -> String.format(java.util.Locale("pt", "BR"), "%,d", doubleVal.toLong())
-        "DECIMAL" -> String.format(java.util.Locale("pt", "BR"), "%,.2f", doubleVal)
+        "DECIMAL" -> {
+            if (thousandsSeparator) {
+                String.format(java.util.Locale("pt", "BR"), "%,.2f", doubleVal)
+            } else {
+                String.format(java.util.Locale("pt", "BR"), "%.2f", doubleVal)
+            }
+        }
         "PERCENT" -> {
             val num = String.format(java.util.Locale("pt", "BR"), "%,.1f", doubleVal * 100)
             "$num%"
         }
         else -> valueStr
     }
-    val res = if (!thousandsSeparator) {
-        formatted.replace(".", "")
-    } else formatted
-    return limitDecimalDigits(res, 3)
+    return limitDecimalDigits(formatted, 3)
 }
 
 @Serializable
