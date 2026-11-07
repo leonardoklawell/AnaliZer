@@ -505,6 +505,31 @@ fun ConfigScreen(
                                             }
                                             onConfigChanged(config.copy(displayGroups = updatedList))
                                         },
+                                        onDuplicateGroup = {
+                                            val newGroupId = UUID.randomUUID().toString()
+                                            val duplicatedGroup = group.copy(
+                                                id = newGroupId,
+                                                name = if (group.name.isNotBlank()) "${group.name} (Cópia)" else ""
+                                            )
+                                            val updatedGroups = displayGroups.toMutableList()
+                                            updatedGroups.add(index + 1, duplicatedGroup)
+
+                                            val linkedCards = cards.filter { it.groupId == group.id }
+                                            val duplicatedCards = linkedCards.map { card ->
+                                                card.copy(
+                                                    id = UUID.randomUUID().toString(),
+                                                    groupId = newGroupId,
+                                                    fieldMappings = card.fieldMappings.map { mapping ->
+                                                        mapping.copy(id = UUID.randomUUID().toString())
+                                                    }
+                                                )
+                                            }
+
+                                            onConfigChanged(config.copy(
+                                                displayGroups = updatedGroups,
+                                                cards = cards + duplicatedCards
+                                            ))
+                                        },
                                         onAddCardToGroup = {
                                             val newCard = CardConfig(
                                                 groupId = group.id,
@@ -1253,6 +1278,7 @@ fun DisplayGroupEditorCard(
     cards: List<CardConfig>,
     onUpdateGroup: (DisplayGroup) -> Unit,
     onDeleteGroup: () -> Unit,
+    onDuplicateGroup: () -> Unit,
     onAddCardToGroup: () -> Unit
 ) {
     val folderNames = spreadsheetData.folderNames
@@ -1297,16 +1323,41 @@ fun DisplayGroupEditorCard(
                     )
                 }
 
-                IconButton(
-                    onClick = onDeleteGroup,
-                    modifier = Modifier.size(36.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Delete,
-                        contentDescription = "Remover Grupo",
-                        tint = Color(0xFFFF6B6B),
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Button(
+                        onClick = onDuplicateGroup,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF0B1825),
+                            contentColor = Color(0xFFEBA036)
+                        ),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ContentCopy,
+                            contentDescription = "Duplicar Grupo",
+                            tint = Color(0xFFEBA036),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Duplicar", fontSize = 12.sp, color = Color(0xFFEBA036), fontWeight = FontWeight.SemiBold)
+                    }
+
+                    IconButton(
+                        onClick = onDeleteGroup,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = "Remover Grupo",
+                            tint = Color(0xFFFF6B6B),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
