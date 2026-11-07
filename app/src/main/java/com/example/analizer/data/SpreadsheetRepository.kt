@@ -38,6 +38,9 @@ class SpreadsheetRepository(
         try {
             for (i in 0 until workbook.numberOfSheets) {
                 val sheet = workbook.getSheetAt(i)
+                if (workbook.isSheetHidden(i) || workbook.isSheetVeryHidden(i)) {
+                    continue
+                }
                 val rawSheetName = sheet.sheetName ?: "Sheet${i + 1}"
                 val sheetName = rawSheetName.trim()
                 if (sheetName.isEmpty()) continue
