@@ -450,36 +450,47 @@ fun AnalysisStatCard(
             )
 
             fun getLabel(pair: ColumnPair): String {
-                if (!pair.labelItem.enabled) return pair.defaultLabel
-                return pair.labelItem.label.ifBlank { pair.defaultLabel }
+                if (!pair.labelItem.enabled) return ""
+                return pair.labelItem.label
             }
 
             fun getValue(pair: ColumnPair): String {
-                if (!pair.valueItem.enabled) return "--"
+                if (!pair.valueItem.enabled) return ""
                 return if (pair.valueItem.value != "--" && pair.valueItem.value.isNotBlank()) pair.valueItem.value else pair.valueItem.label
             }
 
+            val hasRow1 = row1Candidates.any { it.labelItem.enabled || it.valueItem.enabled }
+            val hasRow2 = row2Candidates.any { it.labelItem.enabled || it.valueItem.enabled }
+
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    row1Candidates.forEach { pair ->
-                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            StatDetailItem(getLabel(pair), getValue(pair))
+                if (hasRow1) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        row1Candidates.forEach { pair ->
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                if (pair.labelItem.enabled || pair.valueItem.enabled) {
+                                    StatDetailItem(getLabel(pair), getValue(pair))
+                                }
+                            }
                         }
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    row2Candidates.forEach { pair ->
-                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            StatDetailItem(getLabel(pair), getValue(pair))
+                if (hasRow2) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        row2Candidates.forEach { pair ->
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                if (pair.labelItem.enabled || pair.valueItem.enabled) {
+                                    StatDetailItem(getLabel(pair), getValue(pair))
+                                }
+                            }
                         }
                     }
                 }
@@ -1219,24 +1230,32 @@ fun StatisticsTab(
 
 @Composable
 fun StatDetailItem(label: String, value: String) {
-    val displayValue = if (value.isBlank() || value == "-") "--" else value
+    val displayValue = if (value == "-") "--" else value
+    if (label.isBlank() && displayValue.isBlank()) return
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-            color = Color(0xFF94A3B8),
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(
-            text = displayValue,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-            textAlign = TextAlign.Center
-        )
+        if (label.isNotBlank()) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = Color(0xFF94A3B8),
+                textAlign = TextAlign.Center
+            )
+        }
+        if (label.isNotBlank() && displayValue.isNotBlank()) {
+            Spacer(modifier = Modifier.height(3.dp))
+        }
+        if (displayValue.isNotBlank()) {
+            Text(
+                text = displayValue,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
