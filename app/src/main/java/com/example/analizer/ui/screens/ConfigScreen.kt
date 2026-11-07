@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.example.analizer.Screen
 import com.example.analizer.domain.StatisticsEngine
 import com.example.analizer.model.AnalysisConfig
@@ -1121,9 +1122,10 @@ fun ConfigScreen(
                                                         val formatOpts = listOf("AUTO" to "Automático", "CURRENCY" to "Moeda R$", "INTEGER" to "Inteiro", "DECIMAL" to "Decimal", "PERCENT" to "Porcentagem %")
                                                         Box(modifier = Modifier.weight(1f)) {
                                                             ExposedDropdownMenuBox(
-                                                                expanded = fmtExpanded,
-                                                                onExpandedChange = { fmtExpanded = !fmtExpanded }
-                                                            ) {
+                                            expanded = fmtExpanded,
+                                            onExpandedChange = { fmtExpanded = !fmtExpanded },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
                                                                 val selName = formatOpts.find { it.first == metric.numberFormat }?.second ?: "Automático"
                                                                 OutlinedTextField(
                                                                     value = selName,
@@ -1292,9 +1294,10 @@ fun DisplayGroupEditorCard(
                 Box(modifier = Modifier.weight(1f)) {
                     var folderExpanded by remember { mutableStateOf(false) }
                     ExposedDropdownMenuBox(
-                        expanded = folderExpanded,
-                        onExpandedChange = { folderExpanded = !folderExpanded }
-                    ) {
+                                            expanded = folderExpanded,
+                                            onExpandedChange = { folderExpanded = !folderExpanded },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
                         OutlinedTextField(
                             value = cleanParentFolderName,
                             onValueChange = {},
@@ -1539,9 +1542,10 @@ fun CardEditorView(
                     Box(modifier = Modifier.weight(1f)) {
                         var groupExpanded by remember { mutableStateOf(false) }
                         ExposedDropdownMenuBox(
-                            expanded = groupExpanded,
-                            onExpandedChange = { groupExpanded = !groupExpanded }
-                        ) {
+                                            expanded = groupExpanded,
+                                            onExpandedChange = { groupExpanded = !groupExpanded },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
                             val selectedGroupDisplay = linkedGroup?.name?.takeIf { it.isNotBlank() }
                                 ?: linkedGroup?.selectedFolder?.substringBefore(" - ")?.substringAfterLast("/")?.trim()
                                 ?: "Selecione o Grupo"
@@ -1591,9 +1595,10 @@ fun CardEditorView(
                     Box(modifier = Modifier.weight(1f)) {
                         var sheetExpanded by remember { mutableStateOf(false) }
                         ExposedDropdownMenuBox(
-                            expanded = sheetExpanded,
-                            onExpandedChange = { sheetExpanded = !sheetExpanded }
-                        ) {
+                                            expanded = sheetExpanded,
+                                            onExpandedChange = { sheetExpanded = !sheetExpanded },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
                             OutlinedTextField(
                                 value = currentSheet.ifBlank { "Selecione a Aba" },
                                 onValueChange = {},
@@ -2017,6 +2022,8 @@ fun CardSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(0.94f),
         containerColor = Color(0xFF0D1525),
         titleContentColor = Color.White,
         textContentColor = Color.White,
@@ -2095,7 +2102,8 @@ fun CardSettingsDialog(
                                     Box(modifier = Modifier.fillMaxWidth()) {
                                         ExposedDropdownMenuBox(
                                             expanded = formatExpanded,
-                                            onExpandedChange = { formatExpanded = !formatExpanded }
+                                            onExpandedChange = { formatExpanded = !formatExpanded },
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
                                             val selectedLabel = formatOptions.find { it.first == currentMapping.numberFormat }?.second ?: "Automático"
                                             OutlinedTextField(
