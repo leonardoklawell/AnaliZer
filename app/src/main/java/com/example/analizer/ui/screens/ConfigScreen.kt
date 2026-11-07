@@ -2088,13 +2088,11 @@ fun CardSettingsDialog(
                             }
 
                             if (currentMapping.enabled) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     var formatExpanded by remember { mutableStateOf(false) }
-                                    Box(modifier = Modifier.weight(1f)) {
+                                    Box(modifier = Modifier.fillMaxWidth()) {
                                         ExposedDropdownMenuBox(
                                             expanded = formatExpanded,
                                             onExpandedChange = { formatExpanded = !formatExpanded }
