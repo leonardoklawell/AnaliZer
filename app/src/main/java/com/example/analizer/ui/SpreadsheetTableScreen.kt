@@ -37,24 +37,10 @@ fun SpreadsheetTableScreen(
     var selectedFolder by remember(spreadsheetData, config.selectedFolder) {
         mutableStateOf(
             if (folderNames.isNotEmpty()) {
-                val cleanConfig = config.selectedFolder
-                    .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
-                    .substringBefore(" - ")
-                    .substringAfterLast("/")
-                    .trim()
-                if (cleanConfig.isNotBlank() && folderNames.contains(cleanConfig)) {
-                    cleanConfig
+                if (config.selectedFolder.isNotBlank() && folderNames.contains(config.selectedFolder)) {
+                    config.selectedFolder
                 } else {
-                    val cleanCurrent = spreadsheetData?.currentFolderName
-                        ?.replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
-                        ?.substringBefore(" - ")
-                        ?.substringAfterLast("/")
-                        ?.trim()
-                    if (!cleanCurrent.isNullOrBlank() && folderNames.contains(cleanCurrent)) {
-                        cleanCurrent
-                    } else {
-                        folderNames.first()
-                    }
+                    spreadsheetData?.currentFolderName?.takeIf { folderNames.contains(it) } ?: folderNames.first()
                 }
             } else ""
         )
@@ -219,10 +205,6 @@ fun SpreadsheetTableScreen(
                                 ) {
                                     val currentFolderDisplayName = if (folderNames.isNotEmpty()) {
                                         selectedFolder
-                                            .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
-                                            .substringBefore(" - ")
-                                            .substringAfterLast("/")
-                                            .trim()
                                     } else "Pasta Principal"
                                     OutlinedTextField(
                                         value = currentFolderDisplayName,
@@ -257,10 +239,6 @@ fun SpreadsheetTableScreen(
                                         val displayFolders = if (folderNames.isNotEmpty()) folderNames else listOf("Pasta Principal")
                                         displayFolders.forEach { folder ->
                                             val folderDisplayName = folder
-                                                .replace(Regex("\\.(xlsx|xls|csv|gsheet)$", RegexOption.IGNORE_CASE), "")
-                                                .substringBefore(" - ")
-                                                .substringAfterLast("/")
-                                                .trim()
                                             DropdownMenuItem(
                                                 text = { Text(folderDisplayName, color = Color.White) },
                                                 colors = MenuDefaults.itemColors(textColor = Color.White),

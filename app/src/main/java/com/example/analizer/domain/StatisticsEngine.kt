@@ -325,7 +325,7 @@ class StatisticsEngine {
         return sb.reverse().toString()
     }
 
-    internal fun parseNumber(input: String): Double? {
+    fun parseNumber(input: String): Double? {
         if (input.isBlank()) return null
         val cleaned = input
             .replace(Regex("[$€£¥₹%\\s]"), "")

@@ -1,5 +1,9 @@
 package com.example.analizer.ui.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
@@ -205,6 +209,25 @@ fun AnalyticsScreen(
                                 onMonthSelected = onMonthSelected,
                                 onConfigChanged = onConfigChanged
                             )
+                        } else if (page in 1..2) {
+                            when (page) {
+                                1 -> BarChartTab(
+                                    columnStats = columnStats,
+                                    config = config,
+                                    spreadsheetData = spreadsheetData,
+                                    onConfigChanged = onConfigChanged,
+                                    activeTooltipIndex = activeTooltipIndex,
+                                    onTooltipChanged = { activeTooltipIndex = it }
+                                )
+                                2 -> LineChartTab(
+                                    columnStats = columnStats,
+                                    config = config,
+                                    spreadsheetData = spreadsheetData,
+                                    onConfigChanged = onConfigChanged,
+                                    activeTooltipIndex = activeTooltipIndex,
+                                    onTooltipChanged = { activeTooltipIndex = it }
+                                )
+                            }
                         } else if (columnStats.isEmpty()) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -245,8 +268,6 @@ fun AnalyticsScreen(
                             }
                         } else {
                             when (page) {
-                                1 -> BarChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
-                                2 -> LineChartTab(columnStats, config, activeTooltipIndex, onTooltipChanged = { activeTooltipIndex = it })
                                 3 -> DistributionTab(columnStats)
                                 4 -> RawValuesTab(columnStats)
                             }
@@ -663,8 +684,8 @@ fun StatisticsTab(
     var sortAscending by remember(config.sortAscending) { mutableStateOf(config.sortAscending) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
-    var selectedGroupIdFilter by remember { mutableStateOf<String?>(null) }
-    var selectedItemIndexFilter by remember { mutableStateOf<Int?>(null) }
+    var selectedGroupIdsFilter by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedCardIndicesFilter by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var groupFilterExpanded by remember { mutableStateOf(false) }
     var itemFilterExpanded by remember { mutableStateOf(false) }
 
@@ -706,18 +727,19 @@ fun StatisticsTab(
         }
     }
 
-    val filteredCards = remember(sortedCards, selectedGroupIdFilter, selectedItemIndexFilter) {
+    val filteredCards = remember(sortedCards, selectedGroupIdsFilter, selectedCardIndicesFilter) {
         sortedCards.filter { card ->
-            val matchGroup = selectedGroupIdFilter == null || card.groupId == selectedGroupIdFilter
-            val matchItem = selectedItemIndexFilter == null || cards.indexOf(card) == selectedItemIndexFilter
-            matchGroup && matchItem
+            val cardIdx = cards.indexOf(card)
+            val matchGroup = selectedGroupIdsFilter.isEmpty() || selectedGroupIdsFilter.contains(card.groupId)
+            val matchCard = selectedCardIndicesFilter.isEmpty() || selectedCardIndicesFilter.contains(cardIdx)
+            matchGroup && matchCard
         }
     }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Filter Bar (Grupo / Pasta & Cards)
+        // Filter Bar (Grupo / Pasta & Cards) com Checkbox para análise independente
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -730,12 +752,18 @@ fun StatisticsTab(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Dropdown 1: Filtrar por Grupo
+                // Dropdown 1: Filtrar por Grupo (com Checkbox por Item)
                 Box(modifier = Modifier.weight(1f)) {
-                    val currentGroup = displayGroups.find { it.id == selectedGroupIdFilter }
-                    val currentGroupLabel = currentGroup?.name?.takeIf { it.isNotBlank() }
-                        ?: currentGroup?.selectedFolder?.substringBefore(" - ")?.substringAfterLast("/")?.trim()
-                        ?: "Todos os Grupos"
+                    val currentGroupLabel = when {
+                        selectedGroupIdsFilter.isEmpty() -> "Todos os Grupos"
+                        selectedGroupIdsFilter.size == 1 -> {
+                            val grp = displayGroups.find { it.id == selectedGroupIdsFilter.first() }
+                            grp?.name?.takeIf { it.isNotBlank() }
+                                ?: grp?.selectedFolder?.substringBefore(" - ")?.substringAfterLast("/")?.trim()
+                                ?: "1 Grupo"
+                        }
+                        else -> "${selectedGroupIdsFilter.size} Grupos"
+                    }
                     ExposedDropdownMenuBox(
                         expanded = groupFilterExpanded,
                         onExpandedChange = { groupFilterExpanded = !groupFilterExpanded }
@@ -764,21 +792,62 @@ fun StatisticsTab(
                             onDismissRequest = { groupFilterExpanded = false },
                             modifier = Modifier.background(Color(0xFF02121C))
                         ) {
+                            val allChecked = selectedGroupIdsFilter.isEmpty()
                             DropdownMenuItem(
-                                text = { Text("Todos os Grupos", color = Color.White) },
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(
+                                            checked = allChecked,
+                                            onCheckedChange = {
+                                                selectedGroupIdsFilter = emptySet()
+                                            },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = Color(0xFFEBA036),
+                                                uncheckedColor = Color(0xFF8A99B5),
+                                                checkmarkColor = Color(0xFF0D1525)
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Todos os Grupos", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    }
+                                },
                                 onClick = {
-                                    selectedGroupIdFilter = null
-                                    groupFilterExpanded = false
+                                    selectedGroupIdsFilter = emptySet()
                                 }
                             )
+                            HorizontalDivider(color = Color(0xFF1E283E))
                             displayGroups.forEach { grp ->
                                 val label = grp.name.takeIf { it.isNotBlank() }
                                     ?: grp.selectedFolder.substringBefore(" - ").substringAfterLast("/").trim().ifBlank { "Grupo" }
+                                val isChecked = selectedGroupIdsFilter.contains(grp.id)
                                 DropdownMenuItem(
-                                    text = { Text(label, color = Color.White) },
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = { checked ->
+                                                    selectedGroupIdsFilter = if (checked) {
+                                                        selectedGroupIdsFilter + grp.id
+                                                    } else {
+                                                        selectedGroupIdsFilter - grp.id
+                                                    }
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFFEBA036),
+                                                    uncheckedColor = Color(0xFF8A99B5),
+                                                    checkmarkColor = Color(0xFF0D1525)
+                                                )
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(label, color = Color.White)
+                                        }
+                                    },
                                     onClick = {
-                                        selectedGroupIdFilter = grp.id
-                                        groupFilterExpanded = false
+                                        selectedGroupIdsFilter = if (isChecked) {
+                                            selectedGroupIdsFilter - grp.id
+                                        } else {
+                                            selectedGroupIdsFilter + grp.id
+                                        }
                                     }
                                 )
                             }
@@ -786,9 +855,19 @@ fun StatisticsTab(
                     }
                 }
 
-                // Dropdown 2: Filtrar por Card
+                // Dropdown 2: Filtrar por Card (com Checkbox por Item)
                 Box(modifier = Modifier.weight(1f)) {
-                    val currentCardLabel = if (selectedItemIndexFilter == null) "Todos os Cards" else "Card ${selectedItemIndexFilter!! + 1}"
+                    val currentCardLabel = when {
+                        selectedCardIndicesFilter.isEmpty() -> "Todos os Cards"
+                        selectedCardIndicesFilter.size == 1 -> {
+                            val idx = selectedCardIndicesFilter.first()
+                            val card = cards.getOrNull(idx)
+                            val group = displayGroups.find { it.id == card?.groupId }
+                            val title = if (card != null) resolveGroupName(group, spreadsheetData, config.sheetName, idx) else "Card ${idx + 1}"
+                            title
+                        }
+                        else -> "${selectedCardIndicesFilter.size} Cards"
+                    }
                     ExposedDropdownMenuBox(
                         expanded = itemFilterExpanded,
                         onExpandedChange = { itemFilterExpanded = !itemFilterExpanded }
@@ -817,19 +896,62 @@ fun StatisticsTab(
                             onDismissRequest = { itemFilterExpanded = false },
                             modifier = Modifier.background(Color(0xFF02121C))
                         ) {
+                            val allChecked = selectedCardIndicesFilter.isEmpty()
                             DropdownMenuItem(
-                                text = { Text("Todos os Cards", color = Color.White) },
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(
+                                            checked = allChecked,
+                                            onCheckedChange = {
+                                                selectedCardIndicesFilter = emptySet()
+                                            },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = Color(0xFFEBA036),
+                                                uncheckedColor = Color(0xFF8A99B5),
+                                                checkmarkColor = Color(0xFF0D1525)
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Todos os Cards", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    }
+                                },
                                 onClick = {
-                                    selectedItemIndexFilter = null
-                                    itemFilterExpanded = false
+                                    selectedCardIndicesFilter = emptySet()
                                 }
                             )
-                            cards.forEachIndexed { idx, _ ->
+                            HorizontalDivider(color = Color(0xFF1E283E))
+                            cards.forEachIndexed { idx, card ->
+                                val group = displayGroups.find { it.id == card.groupId }
+                                val title = resolveGroupName(group, spreadsheetData, config.sheetName, idx)
+                                val isChecked = selectedCardIndicesFilter.contains(idx)
                                 DropdownMenuItem(
-                                    text = { Text("Card ${idx + 1}", color = Color.White) },
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = { checked ->
+                                                    selectedCardIndicesFilter = if (checked) {
+                                                        selectedCardIndicesFilter + idx
+                                                    } else {
+                                                        selectedCardIndicesFilter - idx
+                                                    }
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFFEBA036),
+                                                    uncheckedColor = Color(0xFF8A99B5),
+                                                    checkmarkColor = Color(0xFF0D1525)
+                                                )
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Card ${idx + 1} - $title", color = Color.White)
+                                        }
+                                    },
                                     onClick = {
-                                        selectedItemIndexFilter = idx
-                                        itemFilterExpanded = false
+                                        selectedCardIndicesFilter = if (isChecked) {
+                                            selectedCardIndicesFilter - idx
+                                        } else {
+                                            selectedCardIndicesFilter + idx
+                                        }
                                     }
                                 )
                             }
@@ -838,7 +960,7 @@ fun StatisticsTab(
                 }
             }
         }
-        // Month Selector Bar
+                // Month Selector Bar
         MonthSelectorBar(
             selectedMonth = config.selectedMonth,
             onMonthSelected = onMonthSelected,
@@ -1002,17 +1124,113 @@ fun StatisticsTab(
                 }
             }
         } else {
-            filteredCards.forEachIndexed { cardIdx, cardConfig ->
-                AnalysisStatCard(
-                    cardConfig = cardConfig,
-                    columnStats = columnStats,
-                    displayGroups = displayGroups,
-                    spreadsheetData = spreadsheetData,
-                    currentSheetName = config.sheetName,
-                    cardIndex = cardIdx,
-                    selectedMonth = config.selectedMonth,
-                    monthOptions = config.monthOptions
-                )
+            // Container branco para cada grupo de cards, separando os grupos visualmente
+            val groupedCards = remember(filteredCards, displayGroups) {
+                val map = LinkedHashMap<com.example.analizer.model.DisplayGroup?, MutableList<com.example.analizer.model.CardConfig>>()
+                displayGroups.forEach { grp ->
+                    val cardsInGroup = filteredCards.filter { it.groupId == grp.id }
+                    if (cardsInGroup.isNotEmpty()) {
+                        map[grp] = cardsInGroup.toMutableList()
+                    }
+                }
+                val ungrouped = filteredCards.filter { card -> displayGroups.none { it.id == card.groupId } }
+                if (ungrouped.isNotEmpty()) {
+                    map[null] = ungrouped.toMutableList()
+                }
+                map
+            }
+
+            groupedCards.forEach { (grp, groupCards) ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        val grpTitle = if (grp != null) {
+                            resolveGroupName(grp, spreadsheetData, config.sheetName)
+                        } else {
+                            "Cards Gerais"
+                        }
+                        val cleanFolder = grp?.selectedFolder?.substringBefore(" - ")?.substringAfterLast("/")?.trim().orEmpty()
+                        val sheetName = grp?.selectedSheets?.firstOrNull().orEmpty()
+                        val subtitle = listOf(cleanFolder, sheetName).filter { it.isNotBlank() }.joinToString(" • ")
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .background(Color(0xFFFFF7ED), RoundedCornerShape(10.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (grp != null) Icons.Rounded.Folder else Icons.Rounded.FolderOpen,
+                                        contentDescription = null,
+                                        tint = Color(0xFFEBA036),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = grpTitle,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0F172A)
+                                    )
+                                    if (subtitle.isNotBlank()) {
+                                        Text(
+                                            text = subtitle,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                            color = Color(0xFF64748B)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Surface(
+                                color = Color(0xFFF1F5F9),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "${groupCards.size} ${if (groupCards.size == 1) "Card" else "Cards"}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF475569),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                        groupCards.forEach { cardConfig ->
+                            val cardIdx = cards.indexOf(cardConfig).coerceAtLeast(0)
+                            AnalysisStatCard(
+                                cardConfig = cardConfig,
+                                columnStats = columnStats,
+                                displayGroups = displayGroups,
+                                spreadsheetData = spreadsheetData,
+                                currentSheetName = config.sheetName,
+                                cardIndex = cardIdx,
+                                selectedMonth = config.selectedMonth,
+                                monthOptions = config.monthOptions
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1041,103 +1259,621 @@ fun StatDetailItem(label: String, value: String) {
     }
 }
 
+data class ChartPointData(
+    val label: String,
+    val value: Double,
+    val formattedValue: String,
+    val subtitle: String = ""
+)
+
+fun parseCellRange(rangeStr: String): List<String> {
+    val clean = rangeStr.trim().uppercase()
+    if (!clean.contains(":")) {
+        return if (clean.isNotBlank()) listOf(clean) else emptyList()
+    }
+    val parts = clean.split(":")
+    if (parts.size != 2) return emptyList()
+    val startRef = parts[0].trim()
+    val endRef = parts[1].trim()
+    val engine = com.example.analizer.domain.StatisticsEngine()
+    val startCell = engine.parseCellReference(startRef) ?: return emptyList()
+    val endCell = engine.parseCellReference(endRef) ?: return emptyList()
+
+    val minCol = minOf(startCell.first, endCell.first)
+    val maxCol = maxOf(startCell.first, endCell.first)
+    val minRow = minOf(startCell.second, endCell.second)
+    val maxRow = maxOf(startCell.second, endCell.second)
+
+    val cells = mutableListOf<String>()
+    for (r in minRow..maxRow) {
+        for (c in minCol..maxCol) {
+            var n = c + 1
+            var colName = ""
+            while (n > 0) {
+                val rem = (n - 1) % 26
+                colName = ('A' + rem) + colName
+                n = (n - 1) / 26
+            }
+            val rowNum = r + 1
+            cells.add("$colName$rowNum")
+            if (cells.size >= 50) break
+        }
+        if (cells.size >= 50) break
+    }
+    return cells
+}
+
+fun resolveItemTitle(
+    valueIdx: Int,
+    targetCard: com.example.analizer.model.CardConfig?,
+    columnStats: List<ColumnStats>,
+    displayGroups: List<com.example.analizer.model.DisplayGroup>,
+    spreadsheetData: SpreadsheetData?,
+    config: AnalysisConfig
+): String {
+    val titleIdx = when (valueIdx) {
+        4 -> 3
+        8 -> 7
+        12 -> 11
+        16 -> 15
+        6 -> 5
+        10 -> 9
+        14 -> 13
+        18 -> 17
+        else -> (valueIdx - 1).coerceAtLeast(0)
+    }
+    val itemNum = valueIdx + 1
+    if (targetCard != null) {
+        val res = resolveCardFieldValue(titleIdx, targetCard, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
+        if (res.label.isNotBlank() && !res.label.equals("ITEM ${titleIdx + 1}", ignoreCase = true)) {
+            return res.label
+        }
+    }
+    return "ITEM $itemNum"
+}
+
+fun getCardItemValue(
+    card: com.example.analizer.model.CardConfig,
+    valueIdx: Int,
+    columnStats: List<ColumnStats>,
+    displayGroups: List<com.example.analizer.model.DisplayGroup>,
+    spreadsheetData: SpreadsheetData?,
+    config: AnalysisConfig
+): Pair<Double?, String> {
+    val res = resolveCardFieldValue(valueIdx, card, columnStats, displayGroups, spreadsheetData, config.selectedMonth, config.monthOptions)
+    val rawText = if (res.value != "--" && res.value.isNotBlank()) res.value else res.label
+    val num = com.example.analizer.model.parseToDouble(rawText) ?: com.example.analizer.domain.StatisticsEngine().parseNumber(rawText)
+    return Pair(num, rawText)
+}
+
+fun computeChartDataPoints(
+    isLineChart: Boolean,
+    config: AnalysisConfig,
+    spreadsheetData: SpreadsheetData?,
+    columnStats: List<ColumnStats>
+): List<ChartPointData> {
+    val cards = config.effectiveCards
+    val displayGroups = if (config.displayGroups.isNotEmpty()) config.displayGroups else config.effectiveDisplayGroups
+
+    val queryMode = if (isLineChart) config.lineChartQueryMode else config.barChartQueryMode
+    val selectedCardIndex = if (isLineChart) config.lineChartSelectedCardIndex.coerceIn(0, (cards.size - 1).coerceAtLeast(0)) else config.barChartSelectedCardIndex.coerceIn(0, (cards.size - 1).coerceAtLeast(0))
+    val selectedItemIndex = if (isLineChart) config.lineChartSelectedItemIndex else config.barChartSelectedItemIndex
+    val customInterval = if (isLineChart) config.lineChartCustomInterval else config.barChartCustomInterval
+    val itemsSubMode = if (isLineChart) config.lineChartItemsSubMode else config.barChartItemsSubMode
+
+    val allowedValueIndices = listOf(4, 8, 12, 16, 6, 10, 14, 18)
+
+    val list = when (queryMode) {
+        "ITEMS" -> {
+            if (cards.isEmpty()) emptyList()
+            else if (itemsSubMode == "CARD_ITEMS") {
+                val card = cards.getOrNull(selectedCardIndex) ?: cards.first()
+                allowedValueIndices.mapNotNull { vIdx ->
+                    val mapping = card.fieldMappings.find { it.fieldIndex == vIdx }
+                    val isEnabled = mapping?.enabled ?: true
+                    if (!isEnabled) null
+                    else {
+                        val (num, rawText) = getCardItemValue(card, vIdx, columnStats, displayGroups, spreadsheetData, config)
+                        if (num != null) {
+                            val title = resolveItemTitle(vIdx, card, columnStats, displayGroups, spreadsheetData, config)
+                            ChartPointData(
+                                label = title,
+                                value = num,
+                                formattedValue = rawText,
+                                subtitle = "ITEM ${vIdx + 1}"
+                            )
+                        } else null
+                    }
+                }
+            } else {
+                val vIdx = if (selectedItemIndex in allowedValueIndices) selectedItemIndex else allowedValueIndices.first()
+                cards.mapIndexedNotNull { cIdx, card ->
+                    val (num, rawText) = getCardItemValue(card, vIdx, columnStats, displayGroups, spreadsheetData, config)
+                    if (num != null) {
+                        val group = displayGroups.find { it.id == card.groupId }
+                        val cardName = resolveGroupName(group, spreadsheetData, config.sheetName, cIdx)
+                        ChartPointData(
+                            label = cardName,
+                            value = num,
+                            formattedValue = rawText,
+                            subtitle = resolveItemTitle(vIdx, card, columnStats, displayGroups, spreadsheetData, config)
+                        )
+                    } else null
+                }
+            }
+        }
+        "GROUPS" -> {
+            val vIdx = if (selectedItemIndex in allowedValueIndices) selectedItemIndex else allowedValueIndices.first()
+            displayGroups.mapIndexedNotNull { gIdx, grp ->
+                val grpCards = cards.filter { it.groupId == grp.id }
+                if (grpCards.isEmpty()) null
+                else {
+                    val nums = grpCards.mapNotNull { getCardItemValue(it, vIdx, columnStats, displayGroups, spreadsheetData, config).first }
+                    if (nums.isNotEmpty()) {
+                        val avg = nums.average()
+                        val grpName = resolveGroupName(grp, spreadsheetData, config.sheetName, gIdx)
+                        ChartPointData(
+                            label = grpName,
+                            value = avg,
+                            formattedValue = String.format(Locale.getDefault(), "%.2f", avg),
+                            subtitle = "${grpCards.size} cards (Média)"
+                        )
+                    } else null
+                }
+            }
+        }
+        "CARDS" -> {
+            val vIdx = if (selectedItemIndex in allowedValueIndices) selectedItemIndex else allowedValueIndices.first()
+            cards.mapIndexedNotNull { cIdx, card ->
+                val (num, rawText) = getCardItemValue(card, vIdx, columnStats, displayGroups, spreadsheetData, config)
+                if (num != null) {
+                    val group = displayGroups.find { it.id == card.groupId }
+                    val cardName = resolveGroupName(group, spreadsheetData, config.sheetName, cIdx)
+                    ChartPointData(
+                        label = cardName,
+                        value = num,
+                        formattedValue = rawText,
+                        subtitle = resolveItemTitle(vIdx, card, columnStats, displayGroups, spreadsheetData, config)
+                    )
+                } else null
+            }
+        }
+        "INTERVAL" -> {
+            val effInterval = customInterval.ifBlank { "B2:B12" }
+            val cellRefs = parseCellRange(effInterval)
+            val sheetRows = if (config.selectedFolder.isNotBlank()) {
+                spreadsheetData?.getRows(config.selectedFolder, config.sheetName) ?: (spreadsheetData?.sheets?.get(config.sheetName) ?: emptyList())
+            } else {
+                spreadsheetData?.sheets?.get(config.sheetName) ?: emptyList()
+            }
+            val engine = com.example.analizer.domain.StatisticsEngine()
+            cellRefs.mapNotNull { cellRef ->
+                val text = engine.resolveCellText(sheetRows, cellRef)
+                if (!text.isNullOrBlank()) {
+                    val num = com.example.analizer.model.parseToDouble(text) ?: engine.parseNumber(text)
+                    if (num != null) {
+                        ChartPointData(
+                            label = cellRef,
+                            value = num,
+                            formattedValue = text,
+                            subtitle = config.sheetName
+                        )
+                    } else null
+                } else null
+            }
+        }
+        else -> emptyList()
+    }
+    return if (list.isNotEmpty()) list
+    else {
+        columnStats.map { stat ->
+            ChartPointData(
+                label = stat.columnName,
+                value = if (stat.mean.isNaN()) 0.0 else stat.mean,
+                formattedValue = String.format(Locale.getDefault(), "%.2f", stat.mean),
+                subtitle = "Média da coluna"
+            )
+        }
+    }
+}
+
 @Composable
-fun BarChartTab(
+fun ChartAnalysisCard(
+    isLineChart: Boolean,
     columnStats: List<ColumnStats>,
     config: AnalysisConfig,
+    spreadsheetData: SpreadsheetData?,
     activeTooltipIndex: Int?,
-    onTooltipChanged: (Int?) -> Unit
+    onTooltipChanged: (Int?) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val activeStats = if (config.chartSelectedGroupIds.isNotEmpty()) {
-        columnStats.filter { config.chartSelectedGroupIds.contains(it.groupName) }
-    } else {
-        columnStats
+    val title = if (isLineChart) config.lineChartTitle.ifBlank { "Gráfico de Linhas" } else config.barChartTitle.ifBlank { "Gráfico de Barras" }
+    val queryMode = if (isLineChart) config.lineChartQueryMode else config.barChartQueryMode
+    val cards = config.effectiveCards
+    val displayGroups = if (config.displayGroups.isNotEmpty()) config.displayGroups else config.effectiveDisplayGroups
+    val selectedCardIndex = if (isLineChart) config.lineChartSelectedCardIndex else config.barChartSelectedCardIndex
+    val selectedItemIndex = if (isLineChart) config.lineChartSelectedItemIndex else config.barChartSelectedItemIndex
+    val customInterval = if (isLineChart) config.lineChartCustomInterval else config.barChartCustomInterval
+    val itemsSubMode = if (isLineChart) config.lineChartItemsSubMode else config.barChartItemsSubMode
+
+    val dataPoints = remember(isLineChart, config, spreadsheetData, columnStats) {
+        computeChartDataPoints(isLineChart, config, spreadsheetData, columnStats)
+    }
+
+    val summaryMean = if (dataPoints.isNotEmpty()) dataPoints.map { it.value }.average() else 0.0
+    val summaryTotal = if (dataPoints.isNotEmpty()) dataPoints.map { it.value }.sum() else 0.0
+    val summaryMax = if (dataPoints.isNotEmpty()) dataPoints.maxOfOrNull { it.value } ?: 0.0 else 0.0
+    val summaryMin = if (dataPoints.isNotEmpty()) dataPoints.minOfOrNull { it.value } ?: 0.0 else 0.0
+
+    val fmtMean = String.format(Locale.getDefault(), "%.2f", summaryMean)
+    val fmtTotal = String.format(Locale.getDefault(), "%.2f", summaryTotal)
+    val fmtMax = String.format(Locale.getDefault(), "%.2f", summaryMax)
+    val fmtMin = String.format(Locale.getDefault(), "%.2f", summaryMin)
+
+    val modeBadge = when (queryMode) {
+        "ITEMS" -> if (itemsSubMode == "CARD_ITEMS") "Itens do Card" else "Comparação de Cards"
+        "GROUPS" -> "Comparação de Grupos"
+        "CARDS" -> "Comparação de Cards"
+        "INTERVAL" -> "Intervalo (${customInterval.ifBlank { "B2:B12" }})"
+        else -> "Consulta"
+    }
+
+    val subtitle = when (queryMode) {
+        "ITEMS" -> {
+            if (itemsSubMode == "CARD_ITEMS") {
+                val currentCard = cards.getOrNull(selectedCardIndex)
+                val grp = displayGroups.find { it.id == currentCard?.groupId }
+                val cardName = resolveGroupName(grp, spreadsheetData, config.sheetName, selectedCardIndex)
+                "$cardName • ${dataPoints.size} itens"
+            } else {
+                val currentTitle = resolveItemTitle(selectedItemIndex, cards.firstOrNull(), columnStats, displayGroups, spreadsheetData, config)
+                "Item: $currentTitle • ${dataPoints.size} cards"
+            }
+        }
+        "GROUPS" -> {
+            val currentTitle = resolveItemTitle(selectedItemIndex, cards.firstOrNull(), columnStats, displayGroups, spreadsheetData, config)
+            "Item: $currentTitle • ${dataPoints.size} grupos"
+        }
+        "CARDS" -> {
+            val currentTitle = resolveItemTitle(selectedItemIndex, cards.firstOrNull(), columnStats, displayGroups, spreadsheetData, config)
+            "Item: $currentTitle • ${dataPoints.size} cards"
+        }
+        "INTERVAL" -> {
+            val eff = customInterval.ifBlank { "B2:B12" }
+            "Intervalo $eff • ${dataPoints.size} células"
+        }
+        else -> "${dataPoints.size} pontos de dados"
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E8C7)),
-        border = BorderStroke(1.dp, Color(0xFFEDE6DA))
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1825)),
+        border = BorderStroke(1.dp, Color(0xFF1E283E))
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Gráfico de Barras (Médias por Coluna)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A)
-            )
+            // Header: Card layout identical to Analysis Card (pure visualization)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(Color(0xFF152238), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isLineChart) Icons.Rounded.ShowChart else Icons.Rounded.BarChart,
+                            contentDescription = null,
+                            tint = Color(0xFFEBA036),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
 
-            if (activeStats.isEmpty()) {
-                Text("Sem dados para exibir para os grupos selecionados.", color = Color(0xFF788497))
+                Surface(
+                    color = Color(0xFF152238),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFF1E283E))
+                ) {
+                    Text(
+                        text = modeBadge,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFEBA036),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            HorizontalDivider(color = Color(0xFF1E283E))
+
+            // Chart Canvas Section
+            if (dataPoints.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                        .background(Color(0xFF08101A), RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Nenhum dado numérico encontrado para a consulta configurada.\nConfigure o gráfico na aba Configurações.",
+                        color = Color(0xFF64748B),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
             } else {
-                val barColor = Color(0xFFE8A25D)
-                val activeBarColor = Color(0xFF0D1525)
+                val maxVal = dataPoints.maxOfOrNull { it.value }?.takeIf { it > 0.0 && !it.isNaN() } ?: 1.0
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
-                        .pointerInput(activeStats) {
+                        .height(260.dp)
+                        .background(Color(0xFF08101A), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .pointerInput(dataPoints, isLineChart) {
                             detectTapGestures { offset ->
-                                val count = activeStats.size.coerceAtLeast(1)
-                                val barWidth = size.width / (count * 2f)
-                                if (barWidth > 0f) {
-                                    val tappedIndex = (offset.x / (barWidth * 2f)).toInt()
-                                    if (tappedIndex in activeStats.indices) {
-                                        onTooltipChanged(if (activeTooltipIndex == tappedIndex) null else tappedIndex)
-                                    } else {
-                                        onTooltipChanged(null)
+                                val count = dataPoints.size.coerceAtLeast(1)
+                                if (isLineChart) {
+                                    val stepX = if (count > 1) size.width / (count - 1) else size.width
+                                    if (stepX > 0f) {
+                                        val tapped = (offset.x / stepX).roundToInt().coerceIn(0, count - 1)
+                                        onTooltipChanged(if (activeTooltipIndex == tapped) null else tapped)
+                                    }
+                                } else {
+                                    val slotWidth = size.width / count
+                                    if (slotWidth > 0f) {
+                                        val tapped = (offset.x / slotWidth).toInt().coerceIn(0, count - 1)
+                                        onTooltipChanged(if (activeTooltipIndex == tapped) null else tapped)
                                     }
                                 }
                             }
                         }
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val maxVal = activeStats.maxOfOrNull { it.mean }?.takeIf { it > 0.0 && !it.isNaN() } ?: 1.0
-                        val count = activeStats.size.coerceAtLeast(1)
-                        val barWidth = (size.width / (count * 2f)).coerceAtLeast(0f)
+                        val count = dataPoints.size.coerceAtLeast(1)
 
-                        activeStats.forEachIndexed { index, stat ->
-                            val safeMean = if (stat.mean.isNaN() || stat.mean.isInfinite()) 0.0 else stat.mean
-                            val barHeight = ((safeMean.coerceAtLeast(0.0) / maxVal) * (size.height - 40f)).toFloat().coerceIn(0f, size.height)
-                            val left = index * (barWidth * 2f) + barWidth * 0.5f
-                            val top = (size.height - barHeight - 30f).coerceIn(0f, size.height)
+                        // Grid lines
+                        val gridCount = 4
+                        for (i in 0..gridCount) {
+                            val y = size.height - 30f - (i.toFloat() / gridCount) * (size.height - 50f)
+                            drawLine(
+                                color = Color(0xFF152238),
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = 1f
+                            )
+                        }
 
-                            if (barWidth > 0f && barHeight > 0f) {
-                                drawRect(
-                                    color = if (activeTooltipIndex == index) activeBarColor else barColor,
-                                    topLeft = Offset(left, top),
-                                    size = Size(barWidth, barHeight)
-                                )
+                        if (!isLineChart) {
+                            val totalWidth = size.width
+                            val slotWidth = totalWidth / count
+                            val barWidth = (slotWidth * 0.65f).coerceIn(10f, 44f)
+
+                            dataPoints.forEachIndexed { index, dp ->
+                                val safeVal = if (dp.value.isNaN() || dp.value.isInfinite()) 0.0 else dp.value.coerceAtLeast(0.0)
+                                val barHeight = ((safeVal / maxVal) * (size.height - 55f)).toFloat().coerceIn(4f, size.height - 55f)
+                                val centerX = index * slotWidth + slotWidth / 2f
+                                val left = centerX - barWidth / 2f
+                                val top = size.height - 30f - barHeight
+
+                                val isSelected = activeTooltipIndex == index
+                                val barBrush = if (isSelected) {
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFFFDE047), Color(0xFFEBA036)),
+                                        startY = top,
+                                        endY = size.height - 30f
+                                    )
+                                } else {
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFFEBA036), Color(0xFFE07A5F)),
+                                        startY = top,
+                                        endY = size.height - 30f
+                                    )
+                                }
+
+                                val cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f, 6f)
+                                val path = Path().apply {
+                                    addRoundRect(
+                                        androidx.compose.ui.geometry.RoundRect(
+                                            left = left,
+                                            top = top,
+                                            right = left + barWidth,
+                                            bottom = size.height - 30f,
+                                            topLeftCornerRadius = cornerRadius,
+                                            topRightCornerRadius = cornerRadius,
+                                            bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                                            bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero
+                                        )
+                                    )
+                                }
+                                drawPath(path, brush = barBrush)
                             }
+                        } else {
+                            val stepX = if (count > 1) size.width / (count - 1) else size.width / 2f
+                            val points = dataPoints.mapIndexed { index, dp ->
+                                val safeVal = if (dp.value.isNaN() || dp.value.isInfinite()) 0.0 else dp.value.coerceAtLeast(0.0)
+                                val x = if (count > 1) index * stepX else size.width / 2f
+                                val y = (size.height - 30f - ((safeVal / maxVal) * (size.height - 55f)).toFloat()).coerceIn(15f, size.height - 30f)
+                                Offset(x, y)
+                            }
+
+                            if (points.isNotEmpty()) {
+                                val fillPath = Path().apply {
+                                    moveTo(points.first().x, size.height - 30f)
+                                    points.forEach { lineTo(it.x, it.y) }
+                                    lineTo(points.last().x, size.height - 30f)
+                                    close()
+                                }
+                                drawPath(
+                                    path = fillPath,
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(Color(0xFFEBA036).copy(alpha = 0.35f), Color(0xFFEBA036).copy(alpha = 0.02f)),
+                                        startY = 15f,
+                                        endY = size.height - 30f
+                                    )
+                                )
+
+                                val strokePath = Path().apply {
+                                    moveTo(points.first().x, points.first().y)
+                                    for (i in 1 until points.size) {
+                                        lineTo(points[i].x, points[i].y)
+                                    }
+                                }
+                                drawPath(
+                                    path = strokePath,
+                                    color = Color(0xFFEBA036),
+                                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                                )
+
+                                points.forEachIndexed { index, pt ->
+                                    val isSelected = activeTooltipIndex == index
+                                    if (isSelected) {
+                                        drawCircle(
+                                            color = Color(0xFFFDE047).copy(alpha = 0.4f),
+                                            radius = 12.dp.toPx(),
+                                            center = pt
+                                        )
+                                    }
+                                    drawCircle(
+                                        color = if (isSelected) Color(0xFFFDE047) else Color(0xFFEBA036),
+                                        radius = 5.dp.toPx(),
+                                        center = pt
+                                    )
+                                    drawCircle(
+                                        color = Color(0xFF0B1825),
+                                        radius = 2.5.dp.toPx(),
+                                        center = pt
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Bottom labels under bars/points
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        dataPoints.forEachIndexed { idx, dp ->
+                            Text(
+                                text = dp.label.take(8),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                color = if (activeTooltipIndex == idx) Color(0xFFEBA036) else Color(0xFF64748B),
+                                fontWeight = if (activeTooltipIndex == idx) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
 
-                if (activeTooltipIndex != null && activeTooltipIndex in activeStats.indices) {
-                    val stat = activeStats[activeTooltipIndex]
+                // Interactive Tooltip on Tap
+                if (activeTooltipIndex != null && activeTooltipIndex in dataPoints.indices) {
+                    val point = dataPoints[activeTooltipIndex]
                     Surface(
-                        color = Color(0xFF0D1525),
-                        shape = RoundedCornerShape(10.dp)
+                        color = Color(0xFF152238),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFFEBA036)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = "${stat.columnName}: Média = ${String.format(Locale.getDefault(), "%.2f", stat.mean)}",
-                            color = Color(0xFFEBA036),
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = point.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                if (point.subtitle.isNotBlank()) {
+                                    Text(
+                                        text = point.subtitle,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                }
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = point.formattedValue,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFEBA036)
+                                )
+                                val pct = if (summaryTotal > 0.0) (point.value / summaryTotal) * 100 else 0.0
+                                Text(
+                                    text = String.format(Locale.getDefault(), "%.1f%% do Total", pct),
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = Color(0xFFCBD5E1)
+                                )
+                            }
+                        }
                     }
                 } else {
                     Text(
-                        text = "Toque em uma barra para ver detalhes.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF788497)
+                        text = if (isLineChart) "Toque em um ponto para detalhes." else "Toque em uma barra para detalhes.",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        color = Color(0xFF64748B),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
+                }
+            }
+
+            HorizontalDivider(color = Color(0xFF1E283E))
+
+            // Bottom Metrics Row: Replicating AnalysisStatCard Summary Body
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    StatDetailItem("Média", fmtMean)
+                }
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    StatDetailItem("Total", fmtTotal)
+                }
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    StatDetailItem("Máximo", fmtMax)
+                }
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    StatDetailItem("Mínimo", fmtMin)
                 }
             }
         }
@@ -1145,109 +1881,41 @@ fun BarChartTab(
 }
 
 @Composable
+fun BarChartTab(
+    columnStats: List<ColumnStats>,
+    config: AnalysisConfig,
+    spreadsheetData: SpreadsheetData? = null,
+    onConfigChanged: (AnalysisConfig) -> Unit = {},
+    activeTooltipIndex: Int? = null,
+    onTooltipChanged: (Int?) -> Unit = {}
+) {
+    ChartAnalysisCard(
+        isLineChart = false,
+        columnStats = columnStats,
+        config = config,
+        spreadsheetData = spreadsheetData,
+        activeTooltipIndex = activeTooltipIndex,
+        onTooltipChanged = onTooltipChanged
+    )
+}
+
+@Composable
 fun LineChartTab(
     columnStats: List<ColumnStats>,
     config: AnalysisConfig,
-    activeTooltipIndex: Int?,
-    onTooltipChanged: (Int?) -> Unit
+    spreadsheetData: SpreadsheetData? = null,
+    onConfigChanged: (AnalysisConfig) -> Unit = {},
+    activeTooltipIndex: Int? = null,
+    onTooltipChanged: (Int?) -> Unit = {}
 ) {
-    val activeStats = if (config.chartSelectedGroupIds.isNotEmpty()) {
-        columnStats.filter { config.chartSelectedGroupIds.contains(it.groupName) }
-    } else {
-        columnStats
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E8C7)),
-        border = BorderStroke(1.dp, Color(0xFFEDE6DA))
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = "Gráfico de Linhas (Tendência de Médias)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A)
-            )
-
-            if (activeStats.size < 2) {
-                Text("São necessárias pelo menos 2 colunas para exibir o gráfico de linhas.", color = Color(0xFF788497))
-            } else {
-                val lineColor = Color(0xFF0D1525)
-                val dotColor = Color(0xFFE07A5F)
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp)
-                        .pointerInput(activeStats) {
-                            detectTapGestures { offset ->
-                                val stepX = (size.width / (activeStats.size - 1).coerceAtLeast(1))
-                                if (stepX > 0f) {
-                                    val tappedIndex = (offset.x / stepX).roundToInt()
-                                    if (tappedIndex in activeStats.indices) {
-                                        onTooltipChanged(if (activeTooltipIndex == tappedIndex) null else tappedIndex)
-                                    } else {
-                                        onTooltipChanged(null)
-                                    }
-                                }
-                            }
-                        }
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val maxVal = activeStats.maxOfOrNull { it.mean }?.takeIf { it > 0.0 && !it.isNaN() } ?: 1.0
-                        val stepX = (size.width / (activeStats.size - 1).coerceAtLeast(1))
-
-                        val path = Path()
-                        activeStats.forEachIndexed { index, stat ->
-                            val safeMean = if (stat.mean.isNaN() || stat.mean.isInfinite()) 0.0 else stat.mean
-                            val x = index * stepX
-                            val y = (size.height - (((safeMean.coerceAtLeast(0.0) / maxVal) * (size.height - 40f))).toFloat() - 30f).coerceIn(0f, size.height)
-                            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-
-                            drawCircle(
-                                color = if (activeTooltipIndex == index) Color(0xFFEBA036) else dotColor,
-                                radius = if (activeTooltipIndex == index) 9f else 6f,
-                                center = Offset(x, y)
-                            )
-                        }
-
-                        drawPath(
-                            path = path,
-                            color = lineColor,
-                            style = Stroke(width = 3.5.dp.toPx())
-                        )
-                    }
-                }
-
-                if (activeTooltipIndex != null && activeTooltipIndex in activeStats.indices) {
-                    val stat = activeStats[activeTooltipIndex]
-                    Surface(
-                        color = Color(0xFF0D1525),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(
-                            text = "${stat.columnName}: Média = ${String.format(Locale.getDefault(), "%.2f", stat.mean)}",
-                            color = Color(0xFFEBA036),
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                } else {
-                    Text(
-                        text = "Toque em um ponto da linha para ver detalhes.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF788497)
-                    )
-                }
-            }
-        }
-    }
+    ChartAnalysisCard(
+        isLineChart = true,
+        columnStats = columnStats,
+        config = config,
+        spreadsheetData = spreadsheetData,
+        activeTooltipIndex = activeTooltipIndex,
+        onTooltipChanged = onTooltipChanged
+    )
 }
 
 @Composable

@@ -318,12 +318,28 @@ data class AnalysisConfig(
     val monthOptions: List<MonthSelectorOption> = DEFAULT_MONTH_OPTIONS,
     val summaryMetrics: List<SummaryMetricConfig> = DEFAULT_SUMMARY_METRICS,
     val savedProfiles: List<GroupProfile> = emptyList(),
-    val barChartTitle: String = "Gráfico de Barras (Médias por Coluna)",
+    val barChartTitle: String = "Gráfico de Barras",
     val barChartColor: String = "GOLD", // "GOLD", "NAVY", "CORAL", "EMERALD", "PURPLE"
-    val lineChartTitle: String = "Gráfico de Linhas (Tendência de Médias)",
-    val lineChartColor: String = "NAVY",
+    val barChartQueryMode: String = "ITEMS", // "ITEMS", "GROUPS", "CARDS", "INTERVAL"
+    val barChartSelectedCardIndex: Int = 0,
+    val barChartSelectedItemIndex: Int = 4,
+    val barChartCustomInterval: String = "",
+    val barChartItemsSubMode: String = "CARD_ITEMS", // "CARD_ITEMS" or "COMPARE_CARDS"
+
+    val lineChartTitle: String = "Gráfico de Linhas",
+    val lineChartColor: String = "GOLD",
+    val lineChartQueryMode: String = "ITEMS", // "ITEMS", "GROUPS", "CARDS", "INTERVAL"
+    val lineChartSelectedCardIndex: Int = 0,
+    val lineChartSelectedItemIndex: Int = 4,
+    val lineChartCustomInterval: String = "",
+    val lineChartItemsSubMode: String = "CARD_ITEMS", // "CARD_ITEMS" or "COMPARE_CARDS"
+
     val sortFieldIndex: Int? = null,
-    val sortAscending: Boolean = true
+    val sortAscending: Boolean = true,
+    val chartQueryMode: String = "ITEMS", // Legacy / fallback
+    val chartSelectedCardIndex: Int = 0,
+    val chartSelectedItemIndex: Int = 4,
+    val chartCustomInterval: String = ""
 ) {
     val start: Int? get() = startRow
     val end: Int? get() = endRow

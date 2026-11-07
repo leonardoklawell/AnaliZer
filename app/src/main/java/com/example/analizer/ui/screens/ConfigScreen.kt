@@ -1,6 +1,8 @@
 package com.example.analizer.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -23,6 +25,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.analizer.Screen
@@ -929,13 +932,29 @@ fun ConfigScreen(
                                                     val enabledMappings = cardConfig.fieldMappings.filter { it.enabled }
                                                     val displayMappings = if (enabledMappings.isNotEmpty()) enabledMappings else cardConfig.fieldMappings.take(19)
 
+                                                    val cardFolderName = linkedGroup?.selectedFolder?.ifBlank { linkedGroup?.name ?: "" } ?: ""
+                                                    val cardSheetName = cardConfig.selectedSheet.ifBlank { linkedGroup?.selectedSheets?.firstOrNull() ?: "" }
+                                                    val cardSheetRows = if (cardFolderName.isNotBlank()) {
+                                                        spreadsheetData?.getRows(cardFolderName, cardSheetName)
+                                                            ?: (spreadsheetData?.sheets?.get(cardSheetName) ?: emptyList())
+                                                    } else {
+                                                        spreadsheetData?.sheets?.get(cardSheetName) ?: emptyList()
+                                                    }.ifEmpty { spreadsheetData?.sheets?.values?.firstOrNull() ?: emptyList() }
+                                                    val engine = com.example.analizer.domain.StatisticsEngine()
+
                                                     Column(
                                                         verticalArrangement = Arrangement.spacedBy(6.dp)
                                                     ) {
                                                         displayMappings.forEach { mapping ->
                                                             val defaultLabel = "ITEM ${mapping.fieldIndex + 1}"
-                                                            val itemLabel = mapping.titleItemReference.ifBlank { defaultLabel }
-                                                            val cellInfo = if (mapping.valueItemReference.isNotBlank()) " (${mapping.valueItemReference})" else ""
+                                                            val cellRef = mapping.valueItemReference.trim().ifBlank { mapping.titleItemReference.trim() }
+                                                            val resolvedText = if (cellRef.isNotBlank() && engine.parseCellReference(cellRef) != null) {
+                                                                engine.resolveCellText(cardSheetRows, cellRef)
+                                                            } else null
+
+                                                            val itemLabel = resolvedText?.takeIf { it.isNotBlank() }
+                                                                ?: mapping.titleItemReference.takeIf { it.isNotBlank() && engine.parseCellReference(it) == null && it != defaultLabel }
+                                                                ?: defaultLabel
                                                             val isItemObey = cardConfig.obeyMonthSelector && mapping.obeyMonthSelector
 
                                                             Row(
@@ -970,7 +989,7 @@ fun ConfigScreen(
                                                                     )
                                                                 )
                                                                 Text(
-                                                                    text = "$itemLabel$cellInfo",
+                                                                    text = itemLabel,
                                                                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                                                                     color = if (isItemObey) Color.White else Color(0xFF64748B),
                                                                     fontWeight = if (isItemObey) FontWeight.SemiBold else FontWeight.Normal
@@ -1148,125 +1167,23 @@ fun ConfigScreen(
                     }
                     4 -> {
                         // Tab 4: Bar Chart Detailed Config
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1825))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Text(
-                                        text = "Configuração do Gráfico de Barras",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFEBA036)
-                                    )
-
-                                    OutlinedTextField(
-                                        value = config.barChartTitle,
-                                        onValueChange = { onConfigChanged(config.copy(barChartTitle = it)) },
-                                        label = { Text("Título do Gráfico de Barras", fontSize = 11.sp) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(8.dp),
-                                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, color = Color.White),
-                                        colors = darkTextFieldColors()
-                                    )
-
-                                    Text("Cor de Destaque das Barras:", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                                    val colorOptions = listOf("GOLD" to "Dourado", "NAVY" to "Azul Marinho", "CORAL" to "Coral", "EMERALD" to "Esmeralda", "PURPLE" to "Roxo")
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        colorOptions.forEach { (code, name) ->
-                                            val isSel = config.barChartColor == code
-                                            FilterChip(
-                                                selected = isSel,
-                                                onClick = { onConfigChanged(config.copy(barChartColor = code)) },
-                                                label = { Text(name, fontSize = 11.sp) },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = Color(0xFFEBA036),
-                                                    selectedLabelColor = Color(0xFF0D1525),
-                                                    containerColor = Color(0xFF1B273B),
-                                                    labelColor = Color.White
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        ChartConfigTab(
+                            isLineChart = false,
+                            config = config,
+                            spreadsheetData = spreadsheetData,
+                            columnStats = columnStats,
+                            onConfigChanged = onConfigChanged
+                        )
                     }
                     5 -> {
                         // Tab 5: Line Chart Detailed Config
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1825))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Text(
-                                        text = "Configuração do Gráfico de Linhas",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFEBA036)
-                                    )
-
-                                    OutlinedTextField(
-                                        value = config.lineChartTitle,
-                                        onValueChange = { onConfigChanged(config.copy(lineChartTitle = it)) },
-                                        label = { Text("Título do Gráfico de Linhas", fontSize = 11.sp) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(8.dp),
-                                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, color = Color.White),
-                                        colors = darkTextFieldColors()
-                                    )
-
-                                    Text("Cor da Linha de Tendência:", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                                    val colorOptions = listOf("NAVY" to "Azul Marinho", "GOLD" to "Dourado", "CORAL" to "Coral", "EMERALD" to "Esmeralda", "PURPLE" to "Roxo")
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        colorOptions.forEach { (code, name) ->
-                                            val isSel = config.lineChartColor == code
-                                            FilterChip(
-                                                selected = isSel,
-                                                onClick = { onConfigChanged(config.copy(lineChartColor = code)) },
-                                                label = { Text(name, fontSize = 11.sp) },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = Color(0xFFEBA036),
-                                                    selectedLabelColor = Color(0xFF0D1525),
-                                                    containerColor = Color(0xFF1B273B),
-                                                    labelColor = Color.White
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        ChartConfigTab(
+                            isLineChart = true,
+                            config = config,
+                            spreadsheetData = spreadsheetData,
+                            columnStats = columnStats,
+                            onConfigChanged = onConfigChanged
+                        )
                     }
                 }
             }
@@ -2297,3 +2214,480 @@ fun CardSettingsDialog(
     )
 }
 
+
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChartConfigTab(
+    isLineChart: Boolean,
+    config: AnalysisConfig,
+    spreadsheetData: SpreadsheetData?,
+    columnStats: List<com.example.analizer.model.ColumnStats>,
+    onConfigChanged: (AnalysisConfig) -> Unit
+) {
+    val cards = config.effectiveCards
+    val displayGroups = if (config.displayGroups.isNotEmpty()) config.displayGroups else config.effectiveDisplayGroups
+
+    val currentQueryMode = if (isLineChart) config.lineChartQueryMode else config.barChartQueryMode
+    val currentSelectedCardIndex = if (isLineChart) config.lineChartSelectedCardIndex.coerceIn(0, (cards.size - 1).coerceAtLeast(0)) else config.barChartSelectedCardIndex.coerceIn(0, (cards.size - 1).coerceAtLeast(0))
+    val currentSelectedItemIndex = if (isLineChart) config.lineChartSelectedItemIndex else config.barChartSelectedItemIndex
+    val currentCustomInterval = if (isLineChart) config.lineChartCustomInterval else config.barChartCustomInterval
+    val currentItemsSubMode = if (isLineChart) config.lineChartItemsSubMode else config.barChartItemsSubMode
+
+    var cardDropdownExpanded by remember { mutableStateOf(false) }
+    var itemDropdownExpanded by remember { mutableStateOf(false) }
+
+    val allowedValueIndices = listOf(4, 8, 12, 16, 6, 10, 14, 18)
+
+    fun updateConfig(
+        queryMode: String = currentQueryMode,
+        cardIdx: Int = currentSelectedCardIndex,
+        itemIdx: Int = currentSelectedItemIndex,
+        interval: String = currentCustomInterval,
+        subMode: String = currentItemsSubMode
+    ) {
+        if (isLineChart) {
+            onConfigChanged(
+                config.copy(
+                    lineChartQueryMode = queryMode,
+                    lineChartSelectedCardIndex = cardIdx,
+                    lineChartSelectedItemIndex = itemIdx,
+                    lineChartCustomInterval = interval,
+                    lineChartItemsSubMode = subMode
+                )
+            )
+        } else {
+            onConfigChanged(
+                config.copy(
+                    barChartQueryMode = queryMode,
+                    barChartSelectedCardIndex = cardIdx,
+                    barChartSelectedItemIndex = itemIdx,
+                    barChartCustomInterval = interval,
+                    barChartItemsSubMode = subMode
+                )
+            )
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1825)),
+            border = BorderStroke(1.dp, Color(0xFF1E283E))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color(0xFF152238), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isLineChart) Icons.Rounded.ShowChart else Icons.Rounded.BarChart,
+                            contentDescription = null,
+                            tint = Color(0xFFEBA036),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = if (isLineChart) "Configuração do Gráfico de Linhas" else "Configuração do Gráfico de Barras",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFEBA036)
+                        )
+                        Text(
+                            text = "Configure os dados e intervalos que serão consultados na aba de Análise.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFF1E283E))
+
+                // Chart Title
+                OutlinedTextField(
+                    value = if (isLineChart) config.lineChartTitle else config.barChartTitle,
+                    onValueChange = {
+                        if (isLineChart) onConfigChanged(config.copy(lineChartTitle = it))
+                        else onConfigChanged(config.copy(barChartTitle = it))
+                    },
+                    label = { Text("Título do Gráfico", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, color = Color.White),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFEBA036),
+                        unfocusedBorderColor = Color(0xFF1E283E),
+                        focusedContainerColor = Color(0xFF152238),
+                        unfocusedContainerColor = Color(0xFF152238)
+                    )
+                )
+
+                // Query Mode Selection
+                Text(
+                    text = "Dados a Serem Consultados:",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                // Chips for query mode
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val modes = listOf(
+                        Triple("ITEMS", "Itens dos Cards", Icons.Rounded.ViewList),
+                        Triple("GROUPS", "Grupos", Icons.Rounded.Folder),
+                        Triple("CARDS", "Cards", Icons.Rounded.CreditCard),
+                        Triple("INTERVAL", "Intervalo", Icons.Rounded.GridOn)
+                    )
+                    modes.forEach { (modeKey, label, icon) ->
+                        val isSelected = currentQueryMode == modeKey
+                        Surface(
+                            onClick = { updateConfig(queryMode = modeKey) },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFFEBA036) else Color(0xFF152238),
+                            border = if (!isSelected) BorderStroke(1.dp, Color(0xFF1E283E)) else null
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) Color(0xFF0B1825) else Color(0xFFCBD5E1),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color(0xFF0B1825) else Color(0xFFCBD5E1)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Sub-controls based on active query mode
+                when (currentQueryMode) {
+                    "ITEMS" -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // Sub-mode toggle: Card Items vs Compare Cards
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    onClick = { updateConfig(subMode = "CARD_ITEMS") },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (currentItemsSubMode == "CARD_ITEMS") Color(0xFF1E293B) else Color(0xFF101726),
+                                    border = BorderStroke(1.dp, if (currentItemsSubMode == "CARD_ITEMS") Color(0xFFEBA036) else Color(0xFF1E283E)),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "Itens do Card",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (currentItemsSubMode == "CARD_ITEMS") Color(0xFFEBA036) else Color(0xFF94A3B8),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    onClick = { updateConfig(subMode = "COMPARE_CARDS") },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (currentItemsSubMode == "COMPARE_CARDS") Color(0xFF1E293B) else Color(0xFF101726),
+                                    border = BorderStroke(1.dp, if (currentItemsSubMode == "COMPARE_CARDS") Color(0xFFEBA036) else Color(0xFF1E283E)),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "Comparar Cards",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (currentItemsSubMode == "COMPARE_CARDS") Color(0xFFEBA036) else Color(0xFF94A3B8),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (currentItemsSubMode == "CARD_ITEMS") {
+                                // Card selection dropdown
+                                Text("Selecione o Card a consultar:", style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8))
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { cardDropdownExpanded = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = Color(0xFF152238),
+                                            contentColor = Color.White
+                                        ),
+                                        border = BorderStroke(1.dp, Color(0xFF1E283E))
+                                    ) {
+                                        val currentCard = cards.getOrNull(currentSelectedCardIndex)
+                                        val group = displayGroups.find { it.id == currentCard?.groupId }
+                                        val currentCardTitle = resolveGroupName(group, spreadsheetData, config.sheetName, currentSelectedCardIndex)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("Card: $currentCardTitle", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = Color(0xFFEBA036))
+                                        }
+                                    }
+                                    DropdownMenu(
+                                        expanded = cardDropdownExpanded,
+                                        onDismissRequest = { cardDropdownExpanded = false },
+                                        modifier = Modifier.background(Color(0xFF0D1525))
+                                    ) {
+                                        cards.forEachIndexed { idx, card ->
+                                            val group = displayGroups.find { it.id == card.groupId }
+                                            val title = resolveGroupName(group, spreadsheetData, config.sheetName, idx)
+                                            DropdownMenuItem(
+                                                text = { Text(title, color = if (currentSelectedCardIndex == idx) Color(0xFFEBA036) else Color.White) },
+                                                onClick = {
+                                                    updateConfig(cardIdx = idx)
+                                                    cardDropdownExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Item selector dropdown
+                                Text("Selecione o Item para comparar entre os cards:", style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8))
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { itemDropdownExpanded = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = Color(0xFF152238),
+                                            contentColor = Color.White
+                                        ),
+                                        border = BorderStroke(1.dp, Color(0xFF1E283E))
+                                    ) {
+                                        val currentTitle = resolveItemTitle(currentSelectedItemIndex, cards.firstOrNull(), columnStats, displayGroups, spreadsheetData, config)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("Item: $currentTitle", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = Color(0xFFEBA036))
+                                        }
+                                    }
+                                    DropdownMenu(
+                                        expanded = itemDropdownExpanded,
+                                        onDismissRequest = { itemDropdownExpanded = false },
+                                        modifier = Modifier.background(Color(0xFF0D1525))
+                                    ) {
+                                        allowedValueIndices.forEach { vIdx ->
+                                            val title = resolveItemTitle(vIdx, cards.firstOrNull(), columnStats, displayGroups, spreadsheetData, config)
+                                            DropdownMenuItem(
+                                                text = { Text(title, color = if (currentSelectedItemIndex == vIdx) Color(0xFFEBA036) else Color.White) },
+                                                onClick = {
+                                                    updateConfig(itemIdx = vIdx)
+                                                    itemDropdownExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "GROUPS", "CARDS" -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = if (currentQueryMode == "GROUPS") "Selecione o item para comparar entre os Grupos:" else "Selecione o item para comparar entre os Cards:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF94A3B8)
+                            )
+                            Box {
+                                OutlinedButton(
+                                    onClick = { itemDropdownExpanded = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = Color(0xFF152238),
+                                        contentColor = Color.White
+                                    ),
+                                    border = BorderStroke(1.dp, Color(0xFF1E283E))
+                                ) {
+                                    val currentTitle = resolveItemTitle(currentSelectedItemIndex, cards.firstOrNull(), columnStats, displayGroups, spreadsheetData, config)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Item: $currentTitle", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = Color(0xFFEBA036))
+                                    }
+                                }
+                                DropdownMenu(
+                                    expanded = itemDropdownExpanded,
+                                    onDismissRequest = { itemDropdownExpanded = false },
+                                    modifier = Modifier.background(Color(0xFF0D1525))
+                                ) {
+                                    allowedValueIndices.forEach { vIdx ->
+                                        val title = resolveItemTitle(vIdx, cards.firstOrNull(), columnStats, displayGroups, spreadsheetData, config)
+                                        DropdownMenuItem(
+                                            text = { Text(title, color = if (currentSelectedItemIndex == vIdx) Color(0xFFEBA036) else Color.White) },
+                                            onClick = {
+                                                updateConfig(itemIdx = vIdx)
+                                                itemDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "INTERVAL" -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Digite o intervalo de células da planilha a ser consultado:", style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8))
+                            OutlinedTextField(
+                                value = currentCustomInterval,
+                                onValueChange = { updateConfig(interval = it) },
+                                label = { Text("Intervalo de Células", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("Ex: B2:B12 ou C2:C15", color = Color(0xFF64748B)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = Color(0xFFEBA036),
+                                    unfocusedBorderColor = Color(0xFF1E283E),
+                                    focusedContainerColor = Color(0xFF152238),
+                                    unfocusedContainerColor = Color(0xFF152238)
+                                )
+                            )
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf("B2:B10", "B2:B15", "C2:C10", "D2:D10", "S3:S15").forEach { preset ->
+                                    Surface(
+                                        onClick = { updateConfig(interval = preset) },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFF152238),
+                                        border = BorderStroke(1.dp, Color(0xFF1E283E))
+                                    ) {
+                                        Text(
+                                            text = preset,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                            color = Color(0xFFEBA036),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFF1E283E))
+
+                // Preview summary badge
+                val previewPoints = computeChartDataPoints(isLineChart, config, spreadsheetData, columnStats)
+                Surface(
+                    color = Color(0xFF152238),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Color(0xFF1E283E)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Prévia da Consulta:",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEBA036)
+                            )
+                            Text(
+                                text = "${previewPoints.size} pontos encontrados",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = Color(0xFFCBD5E1)
+                            )
+                        }
+                        if (previewPoints.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                previewPoints.take(8).forEach { pt ->
+                                    Surface(
+                                        color = Color(0xFF0B1825),
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.dp, Color(0xFF1E283E))
+                                    ) {
+                                        Text(
+                                            text = "${pt.label}: ${pt.formattedValue}",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                                if (previewPoints.size > 8) {
+                                    Text(
+                                        text = "+${previewPoints.size - 8} mais",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = Color(0xFF94A3B8),
+                                        modifier = Modifier.align(Alignment.CenterVertically)
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "Nenhum valor numérico encontrado para a consulta selecionada.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
