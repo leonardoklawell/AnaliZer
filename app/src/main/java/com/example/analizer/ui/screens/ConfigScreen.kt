@@ -454,15 +454,34 @@ fun ConfigScreen(
                                     onClick = {
                                         val folderNames = spreadsheetData.folderNames
                                         val defaultFolder = folderNames.firstOrNull() ?: "Pasta Principal"
+                                        val newGroupId = UUID.randomUUID().toString()
+                                        val defaultSheet = if (defaultFolder.isNotBlank()) {
+                                            spreadsheetData.getSheetNamesForFolder(defaultFolder).firstOrNull() ?: ""
+                                        } else ""
                                         val newGroup = DisplayGroup(
+                                            id = newGroupId,
                                             name = defaultFolder,
                                             selectedFolder = defaultFolder,
-                                            selectedSheets = if (defaultFolder.isNotBlank()) {
-                                                listOf(spreadsheetData.getSheetNamesForFolder(defaultFolder).firstOrNull() ?: "")
-                                            } else emptyList(),
+                                            selectedSheets = if (defaultSheet.isNotBlank()) listOf(defaultSheet) else emptyList(),
                                             displayOrder = displayGroups.size
                                         )
-                                        onConfigChanged(config.copy(displayGroups = displayGroups + newGroup))
+                                        val newCardForGroup = CardConfig(
+                                            id = UUID.randomUUID().toString(),
+                                            groupId = newGroupId,
+                                            selectedSheet = defaultSheet,
+                                            fieldMappings = (0 until 19).map { idx ->
+                                                CardFieldMapping(
+                                                    fieldIndex = idx,
+                                                    titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "ITEM ${idx + 1}" },
+                                                    valueItemReference = ""
+                                                )
+                                            }
+                                        )
+                                        val currentCardsList = if (config.cards.isEmpty()) cards else config.cards
+                                        onConfigChanged(config.copy(
+                                            displayGroups = displayGroups + newGroup,
+                                            cards = currentCardsList + newCardForGroup
+                                        ))
                                     },
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0B1825), contentColor = Color(0xFFEBA036))
@@ -518,20 +537,51 @@ fun ConfigScreen(
                                             val updatedGroups = displayGroups.toMutableList()
                                             updatedGroups.add(index + 1, duplicatedGroup)
 
-                                            val linkedCards = cards.filter { it.groupId == group.id }
-                                            val duplicatedCards = linkedCards.map { card ->
-                                                card.copy(
-                                                    id = UUID.randomUUID().toString(),
-                                                    groupId = newGroupId,
-                                                    fieldMappings = card.fieldMappings.map { mapping ->
-                                                        mapping.copy(id = UUID.randomUUID().toString())
-                                                    }
+                                            // Cards vinculados ao grupo original (por groupId exato ou primeiro card fallback)
+                                            val linkedCards = cards.filter {
+                                                it.groupId == group.id || (group.id.isNotBlank() && it.groupId.isBlank() && cards.indexOf(it) == 0)
+                                            }
+
+                                            val duplicatedCards = if (linkedCards.isNotEmpty()) {
+                                                linkedCards.map { card ->
+                                                    card.copy(
+                                                        id = UUID.randomUUID().toString(),
+                                                        groupId = newGroupId,
+                                                        selectedSheet = group.selectedSheets.firstOrNull() ?: card.selectedSheet,
+                                                        fieldMappings = card.fieldMappings.map { mapping ->
+                                                            mapping.copy(id = UUID.randomUUID().toString())
+                                                        }
+                                                    )
+                                                }
+                                            } else {
+                                                // Caso nenhum card esteja vinculado explicitamente, cria um card completo com 19 itens para o novo grupo
+                                                listOf(
+                                                    CardConfig(
+                                                        id = UUID.randomUUID().toString(),
+                                                        groupId = newGroupId,
+                                                        selectedSheet = group.selectedSheets.firstOrNull() ?: "",
+                                                        fieldMappings = (0 until 19).map { idx ->
+                                                            CardFieldMapping(
+                                                                fieldIndex = idx,
+                                                                titleItemReference = DEFAULT_CARD_FIELD_NAMES.getOrElse(idx) { "ITEM ${idx + 1}" },
+                                                                valueItemReference = ""
+                                                            )
+                                                        }
+                                                    )
                                                 )
+                                            }
+
+                                            val baseCards = if (config.cards.isEmpty()) {
+                                                cards.map { c ->
+                                                    if (c.groupId.isBlank() && group.id.isNotBlank() && cards.indexOf(c) == 0) c.copy(groupId = group.id) else c
+                                                }
+                                            } else {
+                                                config.cards
                                             }
 
                                             onConfigChanged(config.copy(
                                                 displayGroups = updatedGroups,
-                                                cards = cards + duplicatedCards
+                                                cards = baseCards + duplicatedCards
                                             ))
                                         },
                                         onAddCardToGroup = {
